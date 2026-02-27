@@ -127,3 +127,110 @@ class TestLine2DSetters:
         line = Line2D([0], [0])
         line.set_drawstyle('steps')
         assert line.get_drawstyle() == 'steps'
+
+
+class TestLine2DData:
+    def test_get_data(self):
+        """get_data returns (xdata, ydata) tuple."""
+        line = Line2D([1, 2], [3, 4])
+        x, y = line.get_data()
+        assert x == [1, 2]
+        assert y == [3, 4]
+
+    def test_set_data(self):
+        """set_data replaces both x and y."""
+        line = Line2D([1, 2], [3, 4])
+        line.set_data([10, 20], [30, 40])
+        assert line.get_xdata() == [10, 20]
+        assert line.get_ydata() == [30, 40]
+
+    def test_set_xdata(self):
+        line = Line2D([1, 2], [3, 4])
+        line.set_xdata([10, 20, 30])
+        assert line.get_xdata() == [10, 20, 30]
+        assert line.get_ydata() == [3, 4]  # unchanged
+
+    def test_set_ydata(self):
+        line = Line2D([1, 2], [3, 4])
+        line.set_ydata([10, 20, 30])
+        assert line.get_ydata() == [10, 20, 30]
+        assert line.get_xdata() == [1, 2]  # unchanged
+
+    def test_data_is_copy(self):
+        """get_xdata/get_ydata return copies, not references."""
+        line = Line2D([1, 2], [3, 4])
+        xd = line.get_xdata()
+        xd.append(999)
+        assert line.get_xdata() == [1, 2]
+
+
+class TestLine2DAsElement:
+    def test_as_element_type(self):
+        """_as_element returns dict with type='line'."""
+        line = Line2D([1, 2], [3, 4], color='red')
+        elem = line._as_element()
+        assert elem['type'] == 'line'
+
+    def test_as_element_data(self):
+        line = Line2D([1, 2], [3, 4])
+        elem = line._as_element()
+        assert elem['x'] == [1, 2]
+        assert elem['y'] == [3, 4]
+
+    def test_as_element_color_hex(self):
+        """Color is converted to hex in the element dict."""
+        line = Line2D([0], [0], color='red')
+        elem = line._as_element()
+        assert elem['color'] == '#ff0000'
+
+    def test_as_element_marker_none(self):
+        """Marker 'None' becomes None in element dict."""
+        line = Line2D([0], [0])
+        elem = line._as_element()
+        assert elem['marker'] is None
+
+    def test_as_element_marker_set(self):
+        line = Line2D([0], [0], marker='o')
+        elem = line._as_element()
+        assert elem['marker'] == 'o'
+
+
+class TestLine2DArtist:
+    def test_zorder(self):
+        """Line2D default zorder is 2."""
+        line = Line2D([0], [0])
+        assert line.get_zorder() == 2
+
+    def test_visible(self):
+        """Line2D defaults to visible."""
+        line = Line2D([0], [0])
+        assert line.get_visible() is True
+
+    def test_set_visible(self):
+        line = Line2D([0], [0])
+        line.set_visible(False)
+        assert line.get_visible() is False
+
+    def test_set_alpha(self):
+        line = Line2D([0], [0])
+        line.set_alpha(0.5)
+        assert line.get_alpha() == 0.5
+
+    def test_batch_set(self):
+        """Artist.set() applies multiple properties."""
+        line = Line2D([0], [0])
+        line.set(color='red', linewidth=3.0, visible=False)
+        assert line.get_color() == 'red'
+        assert line.get_linewidth() == 3.0
+        assert line.get_visible() is False
+
+    def test_remove_from_axes(self):
+        """Line2D.remove() removes from axes' lines list."""
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        lines = ax.plot([1, 2], [3, 4])
+        line = lines[0]
+        assert line in ax.lines
+        line.remove()
+        assert line not in ax.lines
+        plt.close('all')
