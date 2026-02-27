@@ -100,12 +100,26 @@ def _render_axes(draw, ax, img_w, img_h):
 
     # Data elements
     for elem in ax._elements:
-        if elem['type'] == 'line':
+        etype = elem.get('type', '')
+        if etype == 'line':
             _draw_line(draw, elem, sx, sy)
-        elif elem['type'] == 'scatter':
+        elif etype == 'scatter':
             _draw_scatter(draw, elem, sx, sy)
-        elif elem['type'] == 'bar':
+        elif etype == 'bar':
             _draw_bar(draw, elem, sx, sy, ymin)
+        elif etype == 'barh':
+            _draw_barh(draw, elem, sx, sy, xmin)
+        elif etype == 'errorbar':
+            _draw_errorbar(draw, elem, sx, sy)
+        elif etype == 'fill_between':
+            _draw_fill_between(draw, elem, sx, sy)
+        elif etype == 'axhline':
+            _draw_axhline(draw, elem, sy, plot_x, plot_w)
+        elif etype == 'axvline':
+            _draw_axvline(draw, elem, sx, plot_y, plot_h)
+        elif etype == 'text':
+            _draw_text(draw, elem, sx, sy)
+        # Unknown types are silently ignored
 
     # Title
     if ax._title:
@@ -167,6 +181,126 @@ def _draw_bar(draw, elem, sx, sy, ymin):
         y_bottom = sy(base_val)
         if y_bottom > y_top:
             draw.rectangle([(x_left, y_top), (x_right, y_bottom)], fill=color)
+
+
+def _draw_barh(draw, elem, sx, sy, xmin):
+    """Draw horizontal bars."""
+    y_vals = elem['y']
+    widths = elem['width']
+    height = elem.get('height', 0.8)
+    color = _to_rgb_255(elem['color'])
+
+    for i in range(len(y_vals)):
+        y_center = y_vals[i]
+        w = widths[i]
+        base_val = max(0, xmin)
+        y_top = sy(y_center + height / 2)
+        y_bottom = sy(y_center - height / 2)
+        x_left = sx(base_val)
+        x_right = sx(w)
+        if x_right > x_left and y_bottom > y_top:
+            draw.rectangle([(x_left, y_top), (x_right, y_bottom)], fill=color)
+
+
+def _draw_errorbar(draw, elem, sx, sy):
+    """Draw error bars."""
+    xd, yd = elem['x'], elem['y']
+    color = _to_rgb_255(elem['color'])
+
+    # Data line
+    if len(xd) >= 2:
+        for i in range(len(xd) - 1):
+            draw.line(
+                [(sx(xd[i]), sy(yd[i])), (sx(xd[i + 1]), sy(yd[i + 1]))],
+                fill=color, width=2
+            )
+
+    # Markers
+    for i in range(len(xd)):
+        cx, cy = sx(xd[i]), sy(yd[i])
+        draw.ellipse([(cx - 3, cy - 3), (cx + 3, cy + 3)], fill=color)
+
+    # Y error bars
+    yerr = elem.get('yerr')
+    if yerr:
+        for i in range(len(xd)):
+            err = yerr[i] if i < len(yerr) else yerr[-1]
+            cx = sx(xd[i])
+            y_lo = sy(yd[i] - err)
+            y_hi = sy(yd[i] + err)
+            draw.line([(cx, y_lo), (cx, y_hi)], fill=color, width=1)
+            draw.line([(cx - 3, y_lo), (cx + 3, y_lo)], fill=color, width=1)
+            draw.line([(cx - 3, y_hi), (cx + 3, y_hi)], fill=color, width=1)
+
+    # X error bars
+    xerr = elem.get('xerr')
+    if xerr:
+        for i in range(len(xd)):
+            err = xerr[i] if i < len(xerr) else xerr[-1]
+            cy = sy(yd[i])
+            x_lo = sx(xd[i] - err)
+            x_hi = sx(xd[i] + err)
+            draw.line([(x_lo, cy), (x_hi, cy)], fill=color, width=1)
+            draw.line([(x_lo, cy - 3), (x_lo, cy + 3)], fill=color, width=1)
+            draw.line([(x_hi, cy - 3), (x_hi, cy + 3)], fill=color, width=1)
+
+
+def _draw_fill_between(draw, elem, sx, sy):
+    """Draw filled region between y1 and y2."""
+    xd = elem['x']
+    y1 = elem['y1']
+    y2 = elem['y2']
+    color = _to_rgb_255(elem['color'])
+
+    if not xd:
+        return
+
+    # Build polygon points: forward along y1, backward along y2
+    points = []
+    for i in range(len(xd)):
+        points.append((sx(xd[i]), sy(y1[i])))
+    for i in range(len(xd) - 1, -1, -1):
+        points.append((sx(xd[i]), sy(y2[i])))
+
+    if len(points) >= 3:
+        draw.polygon(points, fill=color)
+
+
+def _draw_axhline(draw, elem, sy, plot_x, plot_w):
+    """Draw horizontal line spanning the plot area."""
+    y_vals = elem.get('y', [])
+    if not y_vals:
+        return
+    color = _to_rgb_255(elem['color'])
+    py = sy(y_vals[0])
+    draw.line([(plot_x, py), (plot_x + plot_w, py)], fill=color, width=max(1, int(elem.get('linewidth', 1))))
+
+
+def _draw_axvline(draw, elem, sx, plot_y, plot_h):
+    """Draw vertical line spanning the plot area."""
+    x_vals = elem.get('x', [])
+    if not x_vals:
+        return
+    color = _to_rgb_255(elem['color'])
+    px = sx(x_vals[0])
+    draw.line([(px, plot_y), (px, plot_y + plot_h)], fill=color, width=max(1, int(elem.get('linewidth', 1))))
+
+
+def _draw_text(draw, elem, sx, sy):
+    """Draw text at a data position."""
+    x_vals = elem.get('x', [])
+    y_vals = elem.get('y', [])
+    if not x_vals or not y_vals:
+        return
+    px = sx(x_vals[0])
+    py = sy(y_vals[0])
+    text = elem.get('s', '')
+    color = elem.get('color', '#000')
+    try:
+        fill = _to_rgb_255(color)
+    except Exception:
+        fill = (0, 0, 0)
+    draw.text((px, py), text, fill=fill)
 
 
 def _data_range(ax):

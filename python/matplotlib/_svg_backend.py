@@ -126,14 +126,38 @@ def _render_axes(parts, ax, svg_w, svg_h):
                 f'{_fmt_tick(t)}</text>'
             )
 
+    # Clipping rect for data elements
+    clip_id = f'clip-{id(ax)}'
+    parts.append(f'<defs><clipPath id="{clip_id}">')
+    parts.append(
+        f'<rect x="{plot_x}" y="{plot_y}" width="{plot_w}" height="{plot_h}"/>'
+    )
+    parts.append('</clipPath></defs>')
+
     # Data elements
     for elem in ax._elements:
-        if elem['type'] == 'line':
+        etype = elem.get('type', '')
+        if etype == 'line':
             _draw_line(parts, elem, sx, sy)
-        elif elem['type'] == 'scatter':
+        elif etype == 'scatter':
             _draw_scatter(parts, elem, sx, sy)
-        elif elem['type'] == 'bar':
+        elif etype == 'bar':
             _draw_bar(parts, elem, sx, sy, plot_y, plot_h, ymin, ymax)
+        elif etype == 'barh':
+            _draw_barh(parts, elem, sx, sy, plot_x, plot_w, xmin, xmax)
+        elif etype == 'errorbar':
+            _draw_errorbar(parts, elem, sx, sy)
+        elif etype == 'fill_between':
+            _draw_fill_between(parts, elem, sx, sy, clip_id)
+        elif etype == 'fill_betweenx':
+            _draw_fill_betweenx(parts, elem, sx, sy, clip_id)
+        elif etype == 'axhline':
+            _draw_axhline(parts, elem, sx, sy, plot_x, plot_w)
+        elif etype == 'axvline':
+            _draw_axvline(parts, elem, sx, sy, plot_y, plot_h)
+        elif etype == 'text':
+            _draw_text(parts, elem, sx, sy)
+        # Unknown types are silently ignored
 
     # Title
     if ax._title:
@@ -230,9 +254,213 @@ def _draw_bar(parts, elem, sx, sy, plot_y, plot_h, ymin, ymax):
         )
 
 
+def _draw_barh(parts, elem, sx, sy, plot_x, plot_w, xmin, xmax):
+    """Draw horizontal bars."""
+    y_vals = elem['y']
+    widths = elem['width']
+    height = elem.get('height', 0.8)
+    color = elem['color']
+
+    for i in range(len(y_vals)):
+        y_center = y_vals[i]
+        w = widths[i]
+        base_val = max(0, xmin)
+        y_top = sy(y_center + height / 2)
+        y_bottom = sy(y_center - height / 2)
+        x_left = sx(base_val)
+        x_right = sx(w)
+        bw = max(0, x_right - x_left)
+        bh = max(1, y_bottom - y_top)
+        parts.append(
+            f'<rect x="{x_left:.2f}" y="{y_top:.2f}" '
+            f'width="{bw:.2f}" height="{bh:.2f}" fill="{color}"/>'
+        )
+
+
+def _draw_errorbar(parts, elem, sx, sy):
+    """Draw error bars (data line + error whiskers)."""
+    xd, yd = elem['x'], elem['y']
+    color = elem['color']
+    yerr = elem.get('yerr')
+    xerr = elem.get('xerr')
+
+    # Draw data line
+    if len(xd) >= 2:
+        points = ' '.join(f'{sx(xd[i]):.2f},{sy(yd[i]):.2f}' for i in range(len(xd)))
+        parts.append(
+            f'<polyline points="{points}" fill="none" '
+            f'stroke="{color}" stroke-width="1.5"/>'
+        )
+
+    # Draw markers
+    for i in range(len(xd)):
+        cx, cy = sx(xd[i]), sy(yd[i])
+        parts.append(f'<circle cx="{cx:.2f}" cy="{cy:.2f}" r="3" fill="{color}"/>')
+
+    # Draw y error bars
+    if yerr:
+        for i in range(len(xd)):
+            err = yerr[i] if i < len(yerr) else yerr[-1]
+            cx = sx(xd[i])
+            y_lo = sy(yd[i] - err)
+            y_hi = sy(yd[i] + err)
+            # Vertical whisker
+            parts.append(
+                f'<line x1="{cx:.2f}" y1="{y_lo:.2f}" '
+                f'x2="{cx:.2f}" y2="{y_hi:.2f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+            # Caps
+            cap = 3
+            parts.append(
+                f'<line x1="{cx - cap:.2f}" y1="{y_lo:.2f}" '
+                f'x2="{cx + cap:.2f}" y2="{y_lo:.2f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+            parts.append(
+                f'<line x1="{cx - cap:.2f}" y1="{y_hi:.2f}" '
+                f'x2="{cx + cap:.2f}" y2="{y_hi:.2f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+
+    # Draw x error bars
+    if xerr:
+        for i in range(len(xd)):
+            err = xerr[i] if i < len(xerr) else xerr[-1]
+            cy = sy(yd[i])
+            x_lo = sx(xd[i] - err)
+            x_hi = sx(xd[i] + err)
+            parts.append(
+                f'<line x1="{x_lo:.2f}" y1="{cy:.2f}" '
+                f'x2="{x_hi:.2f}" y2="{cy:.2f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+            cap = 3
+            parts.append(
+                f'<line x1="{x_lo:.2f}" y1="{cy - cap:.2f}" '
+                f'x2="{x_lo:.2f}" y2="{cy + cap:.2f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+            parts.append(
+                f'<line x1="{x_hi:.2f}" y1="{cy - cap:.2f}" '
+                f'x2="{x_hi:.2f}" y2="{cy + cap:.2f}" '
+                f'stroke="{color}" stroke-width="1"/>'
+            )
+
+
+def _draw_fill_between(parts, elem, sx, sy, clip_id):
+    """Draw a filled region between y1 and y2."""
+    xd = elem['x']
+    y1 = elem['y1']
+    y2 = elem['y2']
+    color = elem['color']
+    alpha = elem.get('alpha', 0.5)
+
+    if not xd:
+        return
+
+    # Build polygon: forward along y1, then backward along y2
+    points_fwd = [f'{sx(xd[i]):.2f},{sy(y1[i]):.2f}' for i in range(len(xd))]
+    points_bwd = [f'{sx(xd[i]):.2f},{sy(y2[i]):.2f}' for i in range(len(xd) - 1, -1, -1)]
+    all_points = ' '.join(points_fwd + points_bwd)
+
+    parts.append(
+        f'<polygon points="{all_points}" fill="{color}" '
+        f'fill-opacity="{alpha}" stroke="none" clip-path="url(#{clip_id})"/>'
+    )
+
+
+def _draw_fill_betweenx(parts, elem, sx, sy, clip_id):
+    """Draw a filled region between x1 and x2 (horizontal)."""
+    yd = elem['y']
+    x1 = elem['x1']
+    x2 = elem['x2']
+    color = elem['color']
+    alpha = elem.get('alpha', 0.5)
+
+    if not yd:
+        return
+
+    points_fwd = [f'{sx(x1[i]):.2f},{sy(yd[i]):.2f}' for i in range(len(yd))]
+    points_bwd = [f'{sx(x2[i]):.2f},{sy(yd[i]):.2f}' for i in range(len(yd) - 1, -1, -1)]
+    all_points = ' '.join(points_fwd + points_bwd)
+
+    parts.append(
+        f'<polygon points="{all_points}" fill="{color}" '
+        f'fill-opacity="{alpha}" stroke="none" clip-path="url(#{clip_id})"/>'
+    )
+
+
+def _draw_axhline(parts, elem, sx, sy, plot_x, plot_w):
+    """Draw a horizontal line spanning the plot area."""
+    y_vals = elem.get('y', [])
+    if not y_vals:
+        return
+    y = y_vals[0]
+    color = elem['color']
+    lw = elem.get('linewidth', 1.0)
+    ls = elem.get('linestyle', '-')
+    dash = _svg_dash(ls)
+
+    py = sy(y)
+    parts.append(
+        f'<line x1="{plot_x:.2f}" y1="{py:.2f}" '
+        f'x2="{plot_x + plot_w:.2f}" y2="{py:.2f}" '
+        f'stroke="{color}" stroke-width="{lw}"{dash}/>'
+    )
+
+
+def _draw_axvline(parts, elem, sx, sy, plot_y, plot_h):
+    """Draw a vertical line spanning the plot area."""
+    x_vals = elem.get('x', [])
+    if not x_vals:
+        return
+    x = x_vals[0]
+    color = elem['color']
+    lw = elem.get('linewidth', 1.0)
+    ls = elem.get('linestyle', '-')
+    dash = _svg_dash(ls)
+
+    px = sx(x)
+    parts.append(
+        f'<line x1="{px:.2f}" y1="{plot_y:.2f}" '
+        f'x2="{px:.2f}" y2="{plot_y + plot_h:.2f}" '
+        f'stroke="{color}" stroke-width="{lw}"{dash}/>'
+    )
+
+
+def _draw_text(parts, elem, sx, sy):
+    """Draw text at a data position."""
+    x_vals = elem.get('x', [])
+    y_vals = elem.get('y', [])
+    if not x_vals or not y_vals:
+        return
+    px = sx(x_vals[0])
+    py = sy(y_vals[0])
+    text = elem.get('s', '')
+    fontsize = elem.get('fontsize', 11)
+    color = elem.get('color', '#000')
+    parts.append(
+        f'<text x="{px:.2f}" y="{py:.2f}" '
+        f'font-size="{fontsize}" fill="{color}">'
+        f'{_esc(text)}</text>'
+    )
+
+
+def _svg_dash(ls):
+    """Return SVG stroke-dasharray attribute string for a linestyle."""
+    if ls == '--' or ls == 'dashed':
+        return ' stroke-dasharray="6,3"'
+    elif ls == ':' or ls == 'dotted':
+        return ' stroke-dasharray="2,2"'
+    elif ls == '-.' or ls == 'dashdot':
+        return ' stroke-dasharray="6,2,2,2"'
+    return ''
+
+
 def _draw_legend(parts, ax, right_x, top_y):
     """Draw a legend box in the top-right corner."""
-    items = [(e['color'], e.get('label')) for e in ax._elements if e.get('label')]
+    items = [(e.get('color', '#000'), e.get('label')) for e in ax._elements if e.get('label')]
     if not items:
         return
     lw = 120
@@ -263,12 +491,56 @@ def _data_range(ax):
     """Compute min/max across all elements."""
     xs, ys = [], []
     for e in ax._elements:
-        xs.extend(e.get('x', []))
-        if e['type'] == 'bar':
+        etype = e.get('type', '')
+
+        if etype == 'bar':
+            xs.extend(e.get('x', []))
             ys.extend(e.get('height', []))
             ys.append(0)  # bars start from 0
-        else:
+        elif etype == 'barh':
             ys.extend(e.get('y', []))
+            xs.extend(e.get('width', []))
+            xs.append(0)  # horizontal bars start from 0
+        elif etype == 'fill_between':
+            xs.extend(e.get('x', []))
+            ys.extend(e.get('y1', []))
+            ys.extend(e.get('y2', []))
+        elif etype == 'fill_betweenx':
+            ys.extend(e.get('y', []))
+            xs.extend(e.get('x1', []))
+            xs.extend(e.get('x2', []))
+        elif etype == 'errorbar':
+            x_vals = e.get('x', [])
+            y_vals = e.get('y', [])
+            xs.extend(x_vals)
+            ys.extend(y_vals)
+            # Expand range by error bars
+            yerr = e.get('yerr')
+            if yerr:
+                for i, yv in enumerate(y_vals):
+                    err = yerr[i] if i < len(yerr) else yerr[-1]
+                    ys.append(yv + err)
+                    ys.append(yv - err)
+            xerr = e.get('xerr')
+            if xerr:
+                for i, xv in enumerate(x_vals):
+                    err = xerr[i] if i < len(xerr) else xerr[-1]
+                    xs.append(xv + err)
+                    xs.append(xv - err)
+        elif etype == 'axhline':
+            # Only contributes to y range
+            ys.extend(e.get('y', []))
+        elif etype == 'axvline':
+            # Only contributes to x range
+            xs.extend(e.get('x', []))
+        elif etype in ('text', 'annotate'):
+            # Text/annotate positions are ignored for data range calculation
+            pass
+        else:
+            # Generic fallback: line, scatter, etc.
+            xs.extend(e.get('x', []))
+            ys.extend(e.get('y', []))
+
     if not xs:
         xs = [0, 1]
     if not ys:
