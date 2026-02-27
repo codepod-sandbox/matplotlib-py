@@ -49,6 +49,9 @@ def figure(num=None, figsize=None, dpi=100, clear=False, **kwargs):
     """
     global _current_fig, _current_ax, _next_num
 
+    # Save original num to detect string labels
+    label_arg = num if isinstance(num, str) else None
+
     # Resolve the figure number
     if num is None:
         num = _next_num
@@ -78,6 +81,8 @@ def figure(num=None, figsize=None, dpi=100, clear=False, **kwargs):
     fig.number = num
     # If the original num argument was a string label, set it
     # (we captured it above before overwriting num)
+    if isinstance(label_arg, str):
+        fig.set_label(label_arg)
     _figures[num] = fig
     _fig_order.append(num)
     if num >= _next_num:
