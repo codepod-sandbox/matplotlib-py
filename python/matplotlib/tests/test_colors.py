@@ -185,7 +185,11 @@ class TestToRgbaArray:
         assert result[1] == (1.0, 1.0, 1.0, 1.0)
 
     def test_none_color(self):
+        # "none" as a single string returns empty list (upstream compat)
         result = to_rgba_array('none')
+        assert len(result) == 0
+        # "none" in a list of colors still resolves to transparent
+        result = to_rgba_array(['none'])
         assert len(result) == 1
         assert result[0] == (0.0, 0.0, 0.0, 0.0)
 

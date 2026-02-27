@@ -241,6 +241,16 @@ def _build_colors_full_map():
     for name, rgb in BASE_COLORS.items():
         mapping[name] = (rgb[0], rgb[1], rgb[2], 1.0)
 
+    # Add grey ↔ gray aliases so that every 'gray' name has a 'grey'
+    # counterpart and vice versa.
+    for name in list(mapping):
+        if 'gray' in name:
+            alt = name.replace('gray', 'grey')
+            mapping.setdefault(alt, mapping[name])
+        elif 'grey' in name:
+            alt = name.replace('grey', 'gray')
+            mapping.setdefault(alt, mapping[name])
+
     return mapping
 
 
@@ -306,12 +316,9 @@ def to_rgba(c, alpha=None):
         return to_rgba(color_part, alpha=alpha)
 
     if isinstance(c, str):
-        # 'none' → fully transparent
+        # 'none' → fully transparent — alpha is always 0
         if c.lower() == 'none':
-            rgba = (0.0, 0.0, 0.0, 0.0)
-            if alpha is not None:
-                rgba = (rgba[0], rgba[1], rgba[2], float(alpha))
-            return rgba
+            return (0.0, 0.0, 0.0, 0.0)
 
         # Hex
         if c.startswith('#'):
@@ -349,8 +356,13 @@ def to_rgba(c, alpha=None):
 
         raise ValueError(f"Invalid RGBA argument: {c!r}")
 
-    # Tuple / list of floats
+    # Tuple / list of floats (or single-element list-of-list)
     if isinstance(c, (tuple, list)):
+        # Handle list-of-one-list: [[r, g, b]] -> [r, g, b]
+        if (len(c) == 1
+                and isinstance(c[0], (tuple, list))
+                and len(c[0]) in (3, 4)):
+            return to_rgba(c[0], alpha=alpha)
         if len(c) == 3:
             r, g, b = [float(x) for x in c]
             a = float(alpha) if alpha is not None else 1.0
@@ -382,14 +394,34 @@ def to_rgba_array(c, alpha=None):
     list of tuple
         Each element is ``(r, g, b, a)`` with floats in 0-1.
     """
+    # Handle "none" as a special case: returns empty (upstream compat)
+    if isinstance(c, str) and c.lower() == 'none':
+        return []
+
     # Handle (colors, alpha) tuple
     if isinstance(c, tuple) and len(c) == 2:
         first, second = c
-        if isinstance(first, (list, tuple)) and not isinstance(first[0], (int, float)):
-            # It's (list_of_colors, alpha)
-            if alpha is None:
-                alpha = second
-            c = first
+        # Detect (color_str, alpha_float) — a single color with alpha
+        if isinstance(first, str) and isinstance(second, (int, float)):
+            _check_alpha(second)
+            a = alpha if alpha is not None else second
+            return [to_rgba(first, alpha=a)]
+        # Detect (color_tuple, alpha_float) where color_tuple is an
+        # RGB/RGBA tuple
+        if (isinstance(first, (tuple, list))
+                and len(first) in (3, 4)
+                and isinstance(first[0], (int, float))
+                and isinstance(second, (int, float))):
+            _check_alpha(second)
+            a = alpha if alpha is not None else second
+            return [to_rgba(first, alpha=a)]
+        # Detect (list_of_colors, alpha) — multiple colors with shared alpha
+        if isinstance(first, (list, tuple)) and len(first) > 0:
+            if not isinstance(first[0], (int, float)):
+                # It's (list_of_colors, alpha)
+                if alpha is None:
+                    alpha = second
+                c = first
 
     # Single colour
     if isinstance(c, str) or (isinstance(c, (tuple, list))
@@ -509,7 +541,9 @@ def same_color(c1, c2):
         return all(same_color(a, b) for a, b in zip(list1, list2))
 
     if c1_is_seq or c2_is_seq:
-        return False
+        raise ValueError(
+            "Cannot compare a color sequence to a single color. "
+            "Use lists of the same length on both sides.")
 
     return to_rgba(c1) == to_rgba(c2)
 
@@ -548,8 +582,15 @@ def _has_alpha_channel(c):
         return False
     if isinstance(c, (tuple, list)):
         if len(c) == 2 and not isinstance(c[0], (int, float)):
-            # (color, alpha) form
-            return True
+            # (color, alpha) form — but only if alpha is not None
+            # and the inner color actually has 4 elements
+            color_part, alpha_part = c
+            if alpha_part is not None:
+                return True
+            # (color, None): check if inner color itself has alpha
+            if isinstance(color_part, (tuple, list)):
+                return len(color_part) == 4
+            return False
         return len(c) == 4
     return False
 
@@ -792,6 +833,9 @@ class LogNorm(Normalize):
         if vmin <= 0:
             raise ValueError(
                 f"LogNorm requires vmin > 0, got vmin={vmin}")
+        if vmin >= vmax:
+            raise ValueError(
+                f"LogNorm requires vmin < vmax, got vmin={vmin}, vmax={vmax}")
         log_vmin = math.log10(vmin)
         log_vmax = math.log10(vmax)
         if isinstance(value, (list, tuple)):
