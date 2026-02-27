@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+echo "=== pre-push: building matplotlib-python binary ==="
+cargo build -p matplotlib-python
+
+echo "=== pre-push: running Python tests ==="
+target/debug/matplotlib-python -m pytest python/matplotlib/tests/
+
+echo "pre-push passed"

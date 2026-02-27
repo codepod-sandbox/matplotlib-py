@@ -1,0 +1,15 @@
+[package]
+name = "matplotlib-python"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "matplotlib-python"
+path = "src/main.rs"
+
+[dependencies]
+rustpython = { workspace = true, features = [
+  "freeze-stdlib", "importlib", "stdio", "encodings", "host_env",
+] }
+numpy-rust-python = { path = "../../packages/numpy-rust/crates/numpy-rust-python" }
+pil-native = { package = "pil-rust-python", path = "../../packages/pillow-rust/crates/pil-rust-python" }
