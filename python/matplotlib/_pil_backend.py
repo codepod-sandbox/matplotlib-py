@@ -2,7 +2,13 @@
 matplotlib._pil_backend — render a Figure to PNG bytes via PIL.
 """
 
-from matplotlib.colors import to_rgb
+from matplotlib.colors import to_rgb as _to_rgb_float
+
+
+def _to_rgb_255(color):
+    """Convert a colour to an (r, g, b) int tuple (0-255) for PIL."""
+    r, g, b = _to_rgb_float(color)
+    return (int(round(r * 255)), int(round(g * 255)), int(round(b * 255)))
 
 
 def render_figure_png(fig, dpi=None):
@@ -120,7 +126,7 @@ def _draw_line(draw, elem, sx, sy):
     xd, yd = elem['x'], elem['y']
     if len(xd) < 2:
         return
-    color = to_rgb(elem['color'])
+    color = _to_rgb_255(elem['color'])
     for i in range(len(xd) - 1):
         draw.line(
             [(sx(xd[i]), sy(yd[i])), (sx(xd[i + 1]), sy(yd[i + 1]))],
@@ -136,7 +142,7 @@ def _draw_line(draw, elem, sx, sy):
 
 def _draw_scatter(draw, elem, sx, sy):
     xd, yd = elem['x'], elem['y']
-    color = to_rgb(elem['color'])
+    color = _to_rgb_255(elem['color'])
     s = elem.get('s', 20)
     import math
     r = max(1, int(math.sqrt(s) / 2))
@@ -149,7 +155,7 @@ def _draw_bar(draw, elem, sx, sy, ymin):
     xd = elem['x']
     heights = elem['height']
     width = elem['width']
-    color = to_rgb(elem['color'])
+    color = _to_rgb_255(elem['color'])
 
     for i in range(len(xd)):
         x_center = xd[i]
