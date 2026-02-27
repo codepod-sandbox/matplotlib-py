@@ -219,3 +219,68 @@ class TestLabelOuter:
         assert axes[1][1]._yticklabels_visible is False
         assert axes[1][1]._xticklabels_visible is True
         plt.close('all')
+
+
+class TestSubplotLayout:
+    def test_subplots_1x1(self):
+        """subplots(1,1) returns single Axes, not list."""
+        fig, ax = plt.subplots(1, 1)
+        assert isinstance(ax, Axes)
+        plt.close('all')
+
+    def test_subplots_1xn_flat(self):
+        """subplots(1, n) returns flat list, not nested."""
+        fig, axes = plt.subplots(1, 3)
+        assert isinstance(axes, list)
+        assert len(axes) == 3
+        assert all(isinstance(a, Axes) for a in axes)
+        plt.close('all')
+
+    def test_subplots_nx1_flat(self):
+        """subplots(n, 1) returns flat list, not nested."""
+        fig, axes = plt.subplots(3, 1)
+        assert isinstance(axes, list)
+        assert len(axes) == 3
+        assert all(isinstance(a, Axes) for a in axes)
+        plt.close('all')
+
+    def test_subplots_nxm_nested(self):
+        """subplots(n, m) with n>1 and m>1 returns nested list."""
+        fig, axes = plt.subplots(2, 3)
+        assert isinstance(axes, list)
+        assert len(axes) == 2
+        assert all(isinstance(row, list) for row in axes)
+        assert all(len(row) == 3 for row in axes)
+        plt.close('all')
+
+    def test_subplots_figure_axes_count(self):
+        """Figure has correct number of axes after subplots()."""
+        fig, axes = plt.subplots(2, 3)
+        assert len(fig.axes) == 6
+        plt.close('all')
+
+    def test_subplot_3digit(self):
+        """subplot(211) creates subplot at position (2,1,1)."""
+        fig = plt.figure()
+        ax = plt.subplot(211)
+        assert ax._position == (2, 1, 1)
+        plt.close('all')
+
+    def test_subplot_reuse(self):
+        """subplot() reuses existing axes at same position."""
+        fig = plt.figure()
+        ax1 = plt.subplot(211)
+        ax2 = plt.subplot(211)
+        assert ax1 is ax2
+        plt.close('all')
+
+    def test_add_subplot_with_gridspec(self):
+        """add_subplot with GridSpec positions axes correctly."""
+        from matplotlib.gridspec import GridSpec
+        fig = plt.figure()
+        gs = GridSpec(2, 2)
+        ax1 = fig.add_subplot(gs[0, :])
+        ax2 = fig.add_subplot(gs[1, 0])
+        ax3 = fig.add_subplot(gs[1, 1])
+        assert len(fig.axes) == 3
+        plt.close('all')
