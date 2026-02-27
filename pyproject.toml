@@ -1,0 +1,8 @@
+[project]
+name = "matplotlib"
+version = "3.8.0"
+requires-python = ">=3.9"
+
+[tool.pytest.ini_options]
+testpaths = ["python/matplotlib/tests"]
+pythonpath = ["python"]
