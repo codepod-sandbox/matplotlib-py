@@ -4,6 +4,7 @@ import pytest
 
 import matplotlib.pyplot as plt
 from matplotlib.axes import Axes
+from matplotlib.gridspec import GridSpec, SubplotSpec
 
 
 class TestSharexSharey:
@@ -105,4 +106,58 @@ class TestTwinAxes:
         ax2.set_xlim(100, 200)
         assert ax1.get_xlim() == (0, 10)
         assert ax2.get_xlim() == (100, 200)
+        plt.close('all')
+
+
+class TestGridSpec:
+    def test_gridspec_creation(self):
+        """GridSpec(nrows, ncols) creates a grid specification."""
+        gs = GridSpec(2, 3)
+        assert gs.nrows == 2
+        assert gs.ncols == 3
+
+    def test_gridspec_indexing(self):
+        """gs[row, col] returns a SubplotSpec."""
+        gs = GridSpec(2, 2)
+        ss = gs[0, 0]
+        assert isinstance(ss, SubplotSpec)
+
+    def test_gridspec_row_slice(self):
+        """gs[0, :] spans the full first row."""
+        gs = GridSpec(2, 3)
+        ss = gs[0, :]
+        assert ss.rowspan == (0, 1)
+        assert ss.colspan == (0, 3)
+
+    def test_gridspec_col_slice(self):
+        """gs[:, 0] spans the full first column."""
+        gs = GridSpec(2, 3)
+        ss = gs[:, 0]
+        assert ss.rowspan == (0, 2)
+        assert ss.colspan == (0, 1)
+
+    def test_gridspec_block(self):
+        """gs[0:2, 0:2] spans a 2x2 block."""
+        gs = GridSpec(3, 3)
+        ss = gs[0:2, 0:2]
+        assert ss.rowspan == (0, 2)
+        assert ss.colspan == (0, 2)
+
+    def test_add_subplot_with_subplotspec(self):
+        """Figure.add_subplot(SubplotSpec) creates an axes."""
+        fig = plt.figure()
+        gs = GridSpec(2, 2)
+        ax = fig.add_subplot(gs[0, 0])
+        assert isinstance(ax, Axes)
+        assert ax.figure is fig
+        plt.close('all')
+
+    def test_gridspec_different_spans(self):
+        """GridSpec supports axes with different spans."""
+        fig = plt.figure()
+        gs = GridSpec(2, 2)
+        ax_top = fig.add_subplot(gs[0, :])    # top row, full width
+        ax_bl = fig.add_subplot(gs[1, 0])     # bottom-left
+        ax_br = fig.add_subplot(gs[1, 1])     # bottom-right
+        assert len(fig.axes) == 3
         plt.close('all')

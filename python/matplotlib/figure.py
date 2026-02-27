@@ -3,6 +3,7 @@ matplotlib.figure — Figure class.
 """
 
 from matplotlib.axes import Axes
+from matplotlib.gridspec import SubplotSpec
 
 
 class Figure:
@@ -21,9 +22,27 @@ class Figure:
     # Axes management
     # ------------------------------------------------------------------
 
-    def add_subplot(self, nrows=1, ncols=1, index=1):
-        """Add an Axes to the figure."""
-        pos = (nrows, ncols, index)
+    def add_subplot(self, *args, **kwargs):
+        """Add an Axes to the figure.
+
+        Accepts:
+            add_subplot(nrows, ncols, index)
+            add_subplot(SubplotSpec)
+        """
+        if len(args) == 1 and isinstance(args[0], SubplotSpec):
+            ss = args[0]
+            pos = (ss.rowspan, ss.colspan)
+        elif len(args) == 3:
+            nrows, ncols, index = args
+            pos = (nrows, ncols, index)
+        elif len(args) == 0:
+            pos = (1, 1, 1)
+        else:
+            nrows = args[0] if len(args) > 0 else kwargs.get('nrows', 1)
+            ncols = args[1] if len(args) > 1 else kwargs.get('ncols', 1)
+            index = args[2] if len(args) > 2 else kwargs.get('index', 1)
+            pos = (nrows, ncols, index)
+
         ax = Axes(self, pos)
         self._axes.append(ax)
         return ax
