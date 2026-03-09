@@ -38,16 +38,30 @@ def figure(num=None, figsize=None, dpi=100, clear=False, **kwargs):
 
     Parameters
     ----------
-    num : int or str or None
+    num : int or str or Figure or None
         If None, a new figure is created with the next auto-number.
         If int, activate existing figure with that number or create one.
         If str, treated as a label — find existing or create new.
+        If Figure instance, activate it if tracked, else raise ValueError.
     figsize : (float, float), optional
     dpi : int
     clear : bool
         If True, clear the figure after getting/creating it.
     """
     global _current_fig, _current_ax, _next_num
+
+    # Accept a Figure instance
+    if isinstance(num, Figure):
+        for n, f in _figures.items():
+            if f is num:
+                _current_fig = f
+                _current_ax = f._axes[-1] if f._axes else None
+                if clear:
+                    f.clear()
+                return f
+        raise ValueError(
+            "The passed figure is not managed by this pyplot instance"
+        )
 
     # Save original num to detect string labels
     label_arg = num if isinstance(num, str) else None
@@ -85,7 +99,7 @@ def figure(num=None, figsize=None, dpi=100, clear=False, **kwargs):
         fig.set_label(label_arg)
     _figures[num] = fig
     _fig_order.append(num)
-    if num >= _next_num:
+    if isinstance(num, int) and num >= _next_num:
         _next_num = num + 1
 
     _current_fig = fig
@@ -99,35 +113,61 @@ def get_fignums():
 
 
 def get_figlabels():
-    """Return a list of existing figure labels (in creation order)."""
-    return [_figures[n].get_label() for n in _fig_order if n in _figures]
+    """Return a list of existing figure labels sorted by figure number."""
+    return [_figures[n].get_label() for n in sorted(_figures.keys())]
 
 
 def fignum_exists(num):
-    """Return whether figure number *num* exists."""
+    """Return whether figure number *num* exists.
+
+    Also accepts string labels.
+    """
+    if isinstance(num, str):
+        for fig in _figures.values():
+            if fig.get_label() == num:
+                return True
+        return False
     return num in _figures
 
 
-def close(fig='all'):
+def close(fig=None):
     """Close figure(s).
 
     Parameters
     ----------
-    fig : 'all', int, or Figure
+    fig : None, 'all', int, str, or Figure
+        - None: close the current figure
         - ``'all'``: close all figures
         - int: close figure with that number
+        - str: close figure with that label
         - Figure instance: close that figure
     """
-    global _current_fig, _current_ax
+    global _current_fig, _current_ax, _next_num
+
+    if fig is None:
+        # Close current figure
+        if _current_fig is None:
+            return
+        fig = _current_fig
 
     if isinstance(fig, str) and fig == 'all':
         _figures.clear()
         _fig_order.clear()
         _current_fig = None
         _current_ax = None
+        _next_num = 1
         return
 
-    if isinstance(fig, int):
+    if isinstance(fig, str):
+        # Search by label
+        num = None
+        for n, f in _figures.items():
+            if f.get_label() == fig:
+                num = n
+                break
+        if num is None:
+            return  # Not found
+    elif isinstance(fig, int):
         num = fig
     elif isinstance(fig, Figure):
         # Find the number for this figure
@@ -175,7 +215,9 @@ def gcf():
 
 def gca():
     """Get current axes, creating one if needed."""
+    global _current_ax
     _ensure()
+    _current_ax = _current_fig.gca()
     return _current_ax
 
 
@@ -241,13 +283,19 @@ def subplots(nrows=1, ncols=1, figsize=None, dpi=100, **kwargs):
 
     sharex = kwargs.pop('sharex', False)
     sharey = kwargs.pop('sharey', False)
+    num = kwargs.pop('num', None)
+    clear = kwargs.pop('clear', False)
 
-    fig = Figure(figsize=figsize, dpi=dpi)
-    num = _next_num
-    fig.number = num
-    _figures[num] = fig
-    _fig_order.append(num)
-    _next_num = num + 1
+    # If num is given, try to reuse existing figure
+    if num is not None:
+        fig = figure(num=num, figsize=figsize, dpi=dpi, clear=clear)
+    else:
+        fig = Figure(figsize=figsize, dpi=dpi)
+        num = _next_num
+        fig.number = num
+        _figures[num] = fig
+        _fig_order.append(num)
+        _next_num = num + 1
     _current_fig = fig
 
     if nrows == 1 and ncols == 1:

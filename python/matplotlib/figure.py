@@ -4,6 +4,7 @@ matplotlib.figure — Figure class.
 
 from matplotlib.axes import Axes
 from matplotlib.gridspec import SubplotSpec
+from matplotlib.text import Text
 
 
 class Figure:
@@ -17,6 +18,8 @@ class Figure:
         self._label = ''
         self.number = None
         self.stale = True
+        self.texts = []
+        self._current_ax = None
 
     # ------------------------------------------------------------------
     # Axes management
@@ -28,10 +31,27 @@ class Figure:
         Accepts:
             add_subplot(nrows, ncols, index)
             add_subplot(SubplotSpec)
+            add_subplot(existing_axes)
+            add_subplot(NCI)  -- 3-digit integer
         """
+        # Accept an existing Axes instance
+        if len(args) == 1 and isinstance(args[0], Axes):
+            ax = args[0]
+            if ax in self._axes:
+                self._current_ax = ax
+                return ax
+            self._axes.append(ax)
+            self._current_ax = ax
+            return ax
+
         if len(args) == 1 and isinstance(args[0], SubplotSpec):
             ss = args[0]
             pos = (ss.rowspan, ss.colspan)
+        elif len(args) == 1 and isinstance(args[0], int) and args[0] >= 100:
+            # 3-digit form: 211 -> (2, 1, 1)
+            n = args[0]
+            nrows, ncols, index = n // 100, (n % 100) // 10, n % 10
+            pos = (nrows, ncols, index)
         elif len(args) == 3:
             nrows, ncols, index = args
             pos = (nrows, ncols, index)
@@ -45,21 +65,34 @@ class Figure:
 
         ax = Axes(self, pos)
         self._axes.append(ax)
+        self._current_ax = ax
         return ax
 
     def add_axes(self, rect=None, **kwargs):
         """Add an Axes at position *rect* [left, bottom, width, height].
 
+        If *rect* is an Axes instance, add it (or re-activate it).
         If *rect* is None, defaults to [0, 0, 1, 1].
         """
+        if isinstance(rect, Axes):
+            ax = rect
+            if ax in self._axes:
+                self._current_ax = ax
+                return ax
+            self._axes.append(ax)
+            self._current_ax = ax
+            return ax
         if rect is None:
             rect = [0, 0, 1, 1]
         ax = Axes(self, tuple(rect))
         self._axes.append(ax)
+        self._current_ax = ax
         return ax
 
     def gca(self):
         """Get current axes, or create one if none exist."""
+        if self._current_ax is not None and self._current_ax in self._axes:
+            return self._current_ax
         if not self._axes:
             return self.add_subplot(1, 1, 1)
         return self._axes[-1]
@@ -67,12 +100,9 @@ class Figure:
     def sca(self, ax):
         """Set the current axes to *ax*.
 
-        This is a placeholder — in the real matplotlib this reorders the
-        axes stack.  Here we move *ax* to the end so that gca() returns it.
+        Sets _current_ax without reordering the axes list.
         """
-        if ax in self._axes:
-            self._axes.remove(ax)
-            self._axes.append(ax)
+        self._current_ax = ax
 
     def delaxes(self, ax):
         """Remove the Axes *ax* from this figure."""
@@ -94,11 +124,13 @@ class Figure:
     def suptitle(self, t, **kwargs):
         """Set a centered suptitle for the figure.
 
-        Returns the suptitle text (as a string).
+        Returns the Text object.
         """
         self._suptitle = t
+        txt = Text(0.5, 0.98, t, **kwargs)
+        self.texts.append(txt)
         self.stale = True
-        return t
+        return txt
 
     def get_suptitle(self):
         """Return the figure suptitle string, or '' if not set."""
@@ -177,10 +209,21 @@ class Figure:
         """
         pass
 
+    def text(self, x, y, s, **kwargs):
+        """Add text to the figure at position (x, y).
+
+        Returns the Text object.
+        """
+        txt = Text(x, y, s, **kwargs)
+        self.texts.append(txt)
+        return txt
+
     def clear(self):
         """Clear the figure — remove all axes and reset suptitle."""
         self._axes.clear()
         self._suptitle = None
+        self.texts = []
+        self._current_ax = None
         self.stale = True
 
     def clf(self):
