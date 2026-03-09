@@ -165,3 +165,169 @@ def test_errorbar_nonefmt():
     ec = ax.errorbar(x, y, xerr=1, yerr=1, fmt='none')
     plotline, _, barlines = ec.lines
     assert plotline is None
+
+
+# ---------------------------------------------------------------------------
+# 15. test_inverted_cla (upstream ~line 2290)
+# ---------------------------------------------------------------------------
+def test_inverted_cla():
+    """Upstream: test_axes.py::test_inverted_cla (simplified, no imshow)"""
+    fig, ax = plt.subplots()
+
+    # New axis is not inverted
+    assert not ax.xaxis_inverted()
+    assert not ax.yaxis_inverted()
+
+    # Invert, then clear — should reset
+    ax.invert_yaxis()
+    assert ax.yaxis_inverted()
+    ax.cla()
+    assert not ax.yaxis_inverted()
+
+    # Plot after clear — not inverted
+    ax.plot([0, 1, 2], [0, 1, 2])
+    assert not ax.xaxis_inverted()
+    assert not ax.yaxis_inverted()
+
+
+# ---------------------------------------------------------------------------
+# 16. test_bar_labels (upstream ~line 3060)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    ("x", "width", "label", "expected_labels", "container_label"),
+    [
+        ("x", 1, "x", ["_nolegend_"], "x"),
+        (["a", "b", "c"], [10, 20, 15], ["A", "B", "C"],
+         ["A", "B", "C"], "_nolegend_"),
+        (["a", "b", "c"], [10, 20, 15], ["R", "Y", "_nolegend_"],
+         ["R", "Y", "_nolegend_"], "_nolegend_"),
+        (["a", "b", "c"], [10, 20, 15], "bars",
+         ["_nolegend_", "_nolegend_", "_nolegend_"], "bars"),
+    ]
+)
+def test_bar_labels(x, width, label, expected_labels, container_label):
+    """Upstream: test_axes.py::test_bar_labels"""
+    _, ax = plt.subplots()
+    bar_container = ax.bar(x, width, label=label)
+    bar_labels = [bar.get_label() for bar in bar_container]
+    assert expected_labels == bar_labels
+    assert bar_container.get_label() == container_label
+
+
+# ---------------------------------------------------------------------------
+# 17. test_bar_labels_length (upstream ~line 3090)
+# ---------------------------------------------------------------------------
+def test_bar_labels_length():
+    """Upstream: test_axes.py::test_bar_labels_length"""
+    _, ax = plt.subplots()
+    with pytest.raises(ValueError):
+        ax.bar(["x", "y"], [1, 2], label=["X", "Y", "Z"])
+    _, ax = plt.subplots()
+    with pytest.raises(ValueError):
+        ax.bar(["x", "y"], [1, 2], label=["X"])
+
+
+# ---------------------------------------------------------------------------
+# 18. test_scatter_size_arg_size (upstream ~line 4660)
+# ---------------------------------------------------------------------------
+def test_scatter_size_arg_size():
+    """Upstream: test_axes.py::test_scatter_size_arg_size"""
+    x = list(range(4))
+    fig, ax = plt.subplots()
+    with pytest.raises(ValueError, match='same size as x and y'):
+        ax.scatter(x, x, x[1:])
+    with pytest.raises(ValueError, match='same size as x and y'):
+        ax.scatter(x[1:], x[1:], x)
+    with pytest.raises(ValueError, match='float'):
+        ax.scatter(x, x, 'foo')
+
+
+# ---------------------------------------------------------------------------
+# 19. test_twinx_cla (upstream ~line 2350)
+# ---------------------------------------------------------------------------
+def test_twinx_cla():
+    """Upstream: test_axes.py::test_twinx_cla (adapted)"""
+    fig, ax = plt.subplots()
+    ax2 = ax.twinx()
+
+    # After cla(), twin axes should preserve shared connection
+    ax2.cla()
+    assert ax2 in fig.axes
+    assert ax in fig.axes
+
+    # Shared x-limits should still work
+    ax.set_xlim(0, 10)
+    assert ax2.get_xlim() == (0, 10)
+
+
+# ---------------------------------------------------------------------------
+# 20. test_hist_with_empty_input (upstream ~line 5200)
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize('data, expected_number_of_hists',
+                         [([], 1),
+                          ([[]], 1),
+                          ([[], []], 2)])
+def test_hist_with_empty_input(data, expected_number_of_hists):
+    """Upstream: test_axes.py::test_hist_with_empty_input"""
+    fig, ax = plt.subplots()
+    hists, _, _ = ax.hist(data)
+    if not isinstance(hists, list) or (isinstance(hists, list) and len(hists) > 0 and isinstance(hists[0], (int, float))):
+        assert 1 == expected_number_of_hists
+    else:
+        assert len(hists) == expected_number_of_hists
+
+
+# ---------------------------------------------------------------------------
+# 21. test_axes_clear_resets_scale (upstream-inspired)
+# ---------------------------------------------------------------------------
+def test_axes_clear_resets_scale():
+    """Upstream-inspired: cla() resets axis scale."""
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.set_yscale('log')
+    assert ax.get_xscale() == 'log'
+    assert ax.get_yscale() == 'log'
+    ax.cla()
+    assert ax.get_xscale() == 'linear'
+    assert ax.get_yscale() == 'linear'
+
+
+# ---------------------------------------------------------------------------
+# 22. test_axes_set_kwargs (upstream-inspired)
+# ---------------------------------------------------------------------------
+def test_axes_set_kwargs():
+    """Upstream-inspired: set(**kwargs) batch setter."""
+    fig, ax = plt.subplots()
+    ax.set(xlabel='X', ylabel='Y', title='T')
+    assert ax.get_xlabel() == 'X'
+    assert ax.get_ylabel() == 'Y'
+    assert ax.get_title() == 'T'
+    ax.set(xlim=(0, 10), ylim=(-1, 1))
+    assert ax.get_xlim() == (0, 10)
+    assert ax.get_ylim() == (-1, 1)
+
+
+# ---------------------------------------------------------------------------
+# 23. test_axes_twinx_shared_xlim (upstream-inspired)
+# ---------------------------------------------------------------------------
+def test_axes_twinx_shared_xlim():
+    """Upstream-inspired: twinx shares x limits."""
+    fig, ax = plt.subplots()
+    ax.set_xlim(0, 5)
+    ax2 = ax.twinx()
+    assert ax2.get_xlim() == (0, 5)
+    ax.set_xlim(1, 10)
+    assert ax2.get_xlim() == (1, 10)
+
+
+# ---------------------------------------------------------------------------
+# 24. test_axes_twiny_shared_ylim (upstream-inspired)
+# ---------------------------------------------------------------------------
+def test_axes_twiny_shared_ylim():
+    """Upstream-inspired: twiny shares y limits."""
+    fig, ax = plt.subplots()
+    ax.set_ylim(-3, 3)
+    ax2 = ax.twiny()
+    assert ax2.get_ylim() == (-3, 3)
+    ax.set_ylim(0, 100)
+    assert ax2.get_ylim() == (0, 100)

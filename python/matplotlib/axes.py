@@ -110,9 +110,14 @@ class Axes:
         y_list = list(y)
         offsets = list(zip(x_list, y_list))
 
-        # Normalize sizes
+        # Validate sizes
+        if isinstance(s, str):
+            raise ValueError("'s' must be a float or array-like of float, "
+                             "not a string")
         if hasattr(s, '__iter__'):
             sizes = list(s)
+            if len(sizes) != len(x_list):
+                raise ValueError("s must be the same size as x and y")
         else:
             sizes = [s]
 
@@ -160,11 +165,26 @@ class Axes:
             edgecolor = 'black'
 
         # Convert x and height to lists (broadcast scalar height)
-        x_vals = list(x)
+        if isinstance(x, (str, int, float)):
+            x_vals = [x]
+        else:
+            x_vals = list(x)
         if not hasattr(height, '__iter__'):
             h_vals = [height] * len(x_vals)
         else:
             h_vals = list(height)
+
+        # Handle label: list vs scalar
+        if isinstance(label, list):
+            if len(label) != len(x_vals):
+                raise ValueError(
+                    f"'label' must have the same length as 'x' "
+                    f"({len(label)} != {len(x_vals)})")
+            bar_labels = label
+            container_label = '_nolegend_'
+        else:
+            bar_labels = ['_nolegend_'] * len(x_vals)
+            container_label = label
 
         # Handle bottom as list or scalar
         if hasattr(bottom, '__iter__'):
@@ -172,10 +192,16 @@ class Axes:
         else:
             b_vals = [bottom] * len(x_vals)
 
+        # Map string x values to numeric positions
+        if x_vals and isinstance(x_vals[0], str):
+            x_numeric = list(range(len(x_vals)))
+        else:
+            x_numeric = x_vals
+
         # Create Rectangle patches for each bar
         rect_patches = []
         for i in range(len(x_vals)):
-            x_center = x_vals[i]
+            x_center = x_numeric[i]
             h = h_vals[i]
             b = b_vals[i]
             rect = Rectangle(
@@ -187,13 +213,14 @@ class Axes:
             )
             if alpha is not None:
                 rect.set_alpha(alpha)
+            rect.set_label(bar_labels[i])
             rect.axes = self
             rect.figure = self.figure
             self.patches.append(rect)
             rect_patches.append(rect)
 
         # Create BarContainer
-        bc = BarContainer(rect_patches, label=label)
+        bc = BarContainer(rect_patches, label=container_label)
         self.containers.append(bc)
 
         # Backend compatibility: append a single bar element dict
@@ -208,10 +235,35 @@ class Axes:
 
     def hist(self, x, bins=10, **kwargs):
         """Histogram --- compute bins, store as bar chart."""
+        label = kwargs.get('label')
+
+        # Check for list-of-lists (multiple datasets)
+        if hasattr(x, '__iter__') and not isinstance(x, str):
+            x_check = list(x)
+            if x_check and hasattr(x_check[0], '__iter__') and not isinstance(x_check[0], str):
+                # Multiple datasets
+                results = []
+                for dataset in x_check:
+                    results.append(self.hist(dataset, bins, **kwargs))
+                counts_list = [r[0] for r in results]
+                edges = results[0][1] if results else list(range(bins + 1))
+                bc = results[0][2] if results else BarContainer([], label=label)
+                return counts_list, edges, bc
+
         data = list(x)
+
+        # Handle empty data
+        if not data:
+            color = kwargs.get('color') or self._next_color()
+            color = to_hex(color)
+            counts = [0] * bins
+            edges = list(range(bins + 1))
+            bc = BarContainer([], label=label)
+            self.containers.append(bc)
+            return counts, edges, bc
+
         color = kwargs.get('color') or self._next_color()
         color = to_hex(color)
-        label = kwargs.get('label')
         density = kwargs.get('density', False)
 
         # Compute histogram bins
@@ -846,8 +898,7 @@ class Axes:
         self._xscale = 'linear'
         self._yscale = 'linear'
         self._aspect = 'auto'
-        self._shared_x = []
-        self._shared_y = []
+        # Note: do NOT reset _shared_x/_shared_y — shared axes persist across cla()
         self._xticklabels_visible = True
         self._yticklabels_visible = True
         self._xlabel_visible = True
