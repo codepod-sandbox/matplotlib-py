@@ -142,3 +142,101 @@ def test_gca():
     fig.add_subplot(ax1)
     assert fig.axes == [ax0, ax1]
     assert fig.gca() is ax1
+
+
+# ===================================================================
+# Axes remove (Task 5)
+# ===================================================================
+
+def test_axes_remove():
+    """Upstream: test_figure.py::test_axes_remove"""
+    fig, axs = plt.subplots(2, 2)
+    axs[-1][-1].remove()
+    for ax in [axs[0][0], axs[0][1], axs[1][0]]:
+        assert ax in fig.axes
+    assert axs[-1][-1] not in fig.axes
+    assert len(fig.axes) == 3
+
+
+# ===================================================================
+# Invalid figure size (Task 6)
+# ===================================================================
+
+@pytest.mark.parametrize('width, height', [
+    (1, float('nan')),
+    (-1, 1),
+    (float('inf'), 1),
+])
+def test_invalid_figure_size(width, height):
+    """Upstream: test_figure.py::test_invalid_figure_size"""
+    with pytest.raises(ValueError):
+        plt.figure(figsize=(width, height))
+
+    fig = plt.figure()
+    with pytest.raises(ValueError):
+        fig.set_size_inches(width, height)
+
+
+# ===================================================================
+# Figure clear (Task 7)
+# ===================================================================
+
+@pytest.mark.parametrize('clear_meth', ['clear', 'clf'])
+def test_figure_clear(clear_meth):
+    """Upstream: test_figure.py::test_figure_clear (simplified)"""
+    fig = plt.figure()
+
+    # a) empty figure
+    getattr(fig, clear_meth)()
+    assert fig.axes == []
+
+    # b) single axes
+    fig.add_subplot(111)
+    getattr(fig, clear_meth)()
+    assert fig.axes == []
+
+    # c) multiple axes
+    for i in range(2):
+        fig.add_subplot(2, 1, i + 1)
+    getattr(fig, clear_meth)()
+    assert fig.axes == []
+
+
+# ===================================================================
+# Suptitle / supxlabel / supylabel (Task 8)
+# ===================================================================
+
+def test_get_suptitle_supxlabel_supylabel():
+    """Upstream: test_figure.py::test_get_suptitle_supxlabel_supylabel"""
+    fig, ax = plt.subplots()
+    assert fig.get_suptitle() == ""
+    assert fig.get_supxlabel() == ""
+    assert fig.get_supylabel() == ""
+    fig.suptitle('suptitle')
+    assert fig.get_suptitle() == 'suptitle'
+    fig.supxlabel('supxlabel')
+    assert fig.get_supxlabel() == 'supxlabel'
+    fig.supylabel('supylabel')
+    assert fig.get_supylabel() == 'supylabel'
+
+
+# ===================================================================
+# Savefig args / pyplot axes (Task 9)
+# ===================================================================
+
+def test_savefig_args():
+    """Upstream: test_figure.py::test_savefig — arg count validation"""
+    fig = plt.figure()
+    with pytest.raises(TypeError):
+        fig.savefig("fname1.png", "fname2.png")
+
+
+def test_pyplot_axes():
+    """Upstream: test_axes.py::test_pyplot_axes"""
+    fig1, ax1 = plt.subplots()
+    fig2, ax2 = plt.subplots()
+    plt.sca(ax1)
+    assert ax1 is plt.gca()
+    assert fig1 is plt.gcf()
+    plt.close(fig1)
+    plt.close(fig2)

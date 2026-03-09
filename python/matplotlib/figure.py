@@ -2,9 +2,21 @@
 matplotlib.figure — Figure class.
 """
 
+import math
+
 from matplotlib.axes import Axes
 from matplotlib.gridspec import SubplotSpec
 from matplotlib.text import Text
+
+
+def _validate_figsize(w, h):
+    for val, name in [(w, 'width'), (h, 'height')]:
+        if math.isnan(val):
+            raise ValueError(f"figure size must be finite, not {name}={val}")
+        if math.isinf(val):
+            raise ValueError(f"figure size must be finite, not {name}={val}")
+        if val <= 0:
+            raise ValueError(f"figure size must be positive, not {name}={val}")
 
 
 class Figure:
@@ -12,9 +24,12 @@ class Figure:
 
     def __init__(self, figsize=None, dpi=100):
         self.figsize = figsize or (6.4, 4.8)
+        _validate_figsize(self.figsize[0], self.figsize[1])
         self.dpi = dpi
         self._axes = []
         self._suptitle = None
+        self._supxlabel = None
+        self._supylabel = None
         self._label = ''
         self.number = None
         self.stale = True
@@ -136,6 +151,26 @@ class Figure:
         """Return the figure suptitle string, or '' if not set."""
         return self._suptitle if self._suptitle is not None else ''
 
+    def supxlabel(self, t, **kwargs):
+        """Set the supxlabel for the figure."""
+        self._supxlabel = t
+        self.stale = True
+        return t
+
+    def get_supxlabel(self):
+        """Return the figure supxlabel string, or '' if not set."""
+        return self._supxlabel if self._supxlabel is not None else ''
+
+    def supylabel(self, t, **kwargs):
+        """Set the supylabel for the figure."""
+        self._supylabel = t
+        self.stale = True
+        return t
+
+    def get_supylabel(self):
+        """Return the figure supylabel string, or '' if not set."""
+        return self._supylabel if self._supylabel is not None else ''
+
     # ------------------------------------------------------------------
     # Sizing
     # ------------------------------------------------------------------
@@ -148,6 +183,7 @@ class Figure:
         if h is None:
             # w is a (w, h) tuple
             w, h = w
+        _validate_figsize(float(w), float(h))
         self.figsize = (float(w), float(h))
         self.stale = True
 
@@ -238,7 +274,7 @@ class Figure:
     # Output
     # ------------------------------------------------------------------
 
-    def savefig(self, fname, format=None, dpi=None):
+    def savefig(self, fname, *, format=None, dpi=None):
         """Save figure to *fname*.  Format inferred from extension if not given."""
         dpi = dpi or self.dpi
         if format is None and isinstance(fname, str):
