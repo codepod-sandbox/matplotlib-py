@@ -549,3 +549,78 @@ class TestFigureDraw:
         with open(path, 'rb') as f:
             data = f.read()
         assert data[:4] == b'\x89PNG'
+
+
+# ===================================================================
+# TestAxesDrawPlotTypes — Task 9-10 tests
+# ===================================================================
+
+class TestAxesDrawPlotTypes:
+    def test_fill_between(self):
+        fig, ax = plt.subplots()
+        ax.fill_between([0, 1, 2], [0, 1, 0], [0, 0, 0])
+        r = RendererSVG(640, 480, 100)
+        ax.draw(r)
+        assert '<polygon' in r.get_result()
+        plt.close('all')
+
+    def test_fill_betweenx(self):
+        fig, ax = plt.subplots()
+        ax.fill_betweenx([0, 1, 2], [0, 1, 0], [0, 0, 0])
+        r = RendererSVG(640, 480, 100)
+        ax.draw(r)
+        assert '<polygon' in r.get_result()
+        plt.close('all')
+
+    def test_barh(self):
+        fig, ax = plt.subplots()
+        ax.barh([0, 1, 2], [3, 5, 2])
+        r = RendererSVG(640, 480, 100)
+        ax.draw(r)
+        assert '<rect' in r.get_result()
+        plt.close('all')
+
+    def test_errorbar_whiskers(self):
+        fig, ax = plt.subplots()
+        ax.errorbar([0, 1, 2], [1, 2, 1], yerr=0.5)
+        r = RendererSVG(640, 480, 100)
+        ax.draw(r)
+        result = r.get_result()
+        # Should have data line and error whisker lines
+        assert '<polyline' in result
+        plt.close('all')
+
+    def test_axhline(self):
+        fig, ax = plt.subplots()
+        ax.plot([0, 1], [0, 1])
+        ax.axhline(y=0.5)
+        r = RendererSVG(640, 480, 100)
+        ax.draw(r)
+        result = r.get_result()
+        # The spanning line should be rendered
+        assert result.count('<polyline') >= 2  # data line + spanning line
+        plt.close('all')
+
+    def test_axvline(self):
+        fig, ax = plt.subplots()
+        ax.plot([0, 1], [0, 1])
+        ax.axvline(x=0.5)
+        r = RendererSVG(640, 480, 100)
+        ax.draw(r)
+        result = r.get_result()
+        assert result.count('<polyline') >= 2
+        plt.close('all')
+
+    def test_fill_between_returns_polygon(self):
+        fig, ax = plt.subplots()
+        result = ax.fill_between([0, 1, 2], [0, 1, 0])
+        from matplotlib.patches import Polygon
+        assert isinstance(result, Polygon)
+        plt.close('all')
+
+    def test_barh_returns_container(self):
+        fig, ax = plt.subplots()
+        from matplotlib.container import BarContainer
+        result = ax.barh([0, 1], [3, 5])
+        assert isinstance(result, BarContainer)
+        plt.close('all')

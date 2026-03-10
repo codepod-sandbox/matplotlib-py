@@ -325,13 +325,31 @@ class Axes:
         label = kwargs.get('label')
         y_vals = list(y)
         w_vals = list(width)
+
+        rect_patches = []
+        for i in range(len(y_vals)):
+            y_center = y_vals[i]
+            w = w_vals[i]
+            rect = Rectangle(
+                (0, y_center - height / 2), w, height,
+                facecolor=color, edgecolor='black',
+            )
+            rect.axes = self
+            rect.figure = self.figure
+            self.patches.append(rect)
+            rect_patches.append(rect)
+
+        bc = BarContainer(rect_patches, label=label)
+        self.containers.append(bc)
+
+        # Keep _elements for backward compat
         elem = {
             'type': 'barh',
             'y': y_vals, 'width': w_vals, 'height': height,
             'color': color, 'label': label,
         }
         self._elements.append(elem)
-        return elem
+        return bc
 
     def errorbar(self, x, y, yerr=None, xerr=None, **kwargs):
         """Error bar plot."""
@@ -363,6 +381,10 @@ class Axes:
         )
         self.containers.append(ec)
 
+        # Store error data on the container for rendering
+        ec._yerr_data = (x_list, y_list, yerr) if yerr is not None else None
+        ec._xerr_data = (x_list, y_list, xerr) if xerr is not None else None
+
         # Backend compatibility
         elem = {
             'type': 'errorbar',
@@ -388,14 +410,35 @@ class Axes:
         color = to_hex(color)
         label = kwargs.get('label')
         alpha = kwargs.get('alpha', 0.5)
-        y2_list = list(y2) if hasattr(y2, '__iter__') else [y2] * len(list(x))
+
+        x_list = list(x)
+        y1_list = list(y1)
+        y2_list = list(y2) if hasattr(y2, '__iter__') else [y2] * len(x_list)
+
+        # Build polygon: forward along y1, backward along y2
+        verts = []
+        for i in range(len(x_list)):
+            verts.append((x_list[i], y1_list[i]))
+        for i in range(len(x_list) - 1, -1, -1):
+            verts.append((x_list[i], y2_list[i]))
+
+        from matplotlib.patches import Polygon
+        poly = Polygon(verts, facecolor=color, edgecolor='none')
+        poly.set_alpha(alpha)
+        if label:
+            poly.set_label(label)
+        poly.axes = self
+        poly.figure = self.figure
+        self.patches.append(poly)
+
+        # Keep _elements for backward compat (will be removed in Task 11)
         elem = {
             'type': 'fill_between',
-            'x': list(x), 'y1': list(y1), 'y2': y2_list,
+            'x': x_list, 'y1': y1_list, 'y2': y2_list,
             'color': color, 'alpha': alpha, 'label': label,
         }
         self._elements.append(elem)
-        return elem
+        return poly
 
     def fill_betweenx(self, y, x1, x2=0, **kwargs):
         """Fill between two curves in the x-direction."""
@@ -409,14 +452,33 @@ class Axes:
         color = to_hex(color)
         label = kwargs.get('label')
         alpha = kwargs.get('alpha', 0.5)
-        x2_list = list(x2) if hasattr(x2, '__iter__') else [x2] * len(list(y))
+
+        y_list = list(y)
+        x1_list = list(x1)
+        x2_list = list(x2) if hasattr(x2, '__iter__') else [x2] * len(y_list)
+
+        verts = []
+        for i in range(len(y_list)):
+            verts.append((x1_list[i], y_list[i]))
+        for i in range(len(y_list) - 1, -1, -1):
+            verts.append((x2_list[i], y_list[i]))
+
+        from matplotlib.patches import Polygon
+        poly = Polygon(verts, facecolor=color, edgecolor='none')
+        poly.set_alpha(alpha)
+        if label:
+            poly.set_label(label)
+        poly.axes = self
+        poly.figure = self.figure
+        self.patches.append(poly)
+
         elem = {
             'type': 'fill_betweenx',
-            'y': list(y), 'x1': list(x1), 'x2': x2_list,
+            'y': y_list, 'x1': x1_list, 'x2': x2_list,
             'color': color, 'alpha': alpha, 'label': label,
         }
         self._elements.append(elem)
-        return elem
+        return poly
 
     def axhline(self, y=0, **kwargs):
         """Add a horizontal line across the axes."""
@@ -434,6 +496,7 @@ class Axes:
             linestyle=linestyle,
             label=label,
         )
+        line._spanning = 'horizontal'
         line.axes = self
         line.figure = self.figure
         self.lines.append(line)
@@ -465,6 +528,7 @@ class Axes:
             linestyle=linestyle,
             label=label,
         )
+        line._spanning = 'vertical'
         line.axes = self
         line.figure = self.figure
         self.lines.append(line)
@@ -633,41 +697,52 @@ class Axes:
         return (lo, hi)
 
     def _auto_xlim(self):
-        """Auto-calculate x limits from data in lines and collections."""
+        """Auto-calculate x limits from data in lines, collections, and patches."""
         xs = []
         for line in self.lines:
+            spanning = getattr(line, '_spanning', None)
+            if spanning == 'horizontal':
+                continue  # axhline doesn't contribute to x range
             xs.extend(line.get_xdata())
         for coll in self.collections:
             for pt in coll.get_offsets():
                 xs.append(pt[0])
-        # Also check _elements for backward compat data
-        if not xs:
-            for e in self._elements:
-                if 'x' in e:
-                    val = e['x']
-                    if isinstance(val, list):
-                        xs.extend(val)
+        for patch in self.patches:
+            if hasattr(patch, '_xy') and hasattr(patch, '_width'):
+                # Rectangle
+                xs.append(patch._xy[0])
+                xs.append(patch._xy[0] + patch._width)
+            elif hasattr(patch, '_xy') and isinstance(patch._xy, list):
+                # Polygon
+                for pt in patch._xy:
+                    xs.append(pt[0])
         if not xs:
             return (0.0, 1.0)
         return (min(xs), max(xs))
 
     def _auto_ylim(self):
-        """Auto-calculate y limits from data in lines and collections."""
+        """Auto-calculate y limits from data in lines, collections, and patches."""
         ys = []
         for line in self.lines:
+            spanning = getattr(line, '_spanning', None)
+            if spanning == 'vertical':
+                continue  # axvline doesn't contribute to y range
             ys.extend(line.get_ydata())
         for coll in self.collections:
             for pt in coll.get_offsets():
                 ys.append(pt[1])
-        if not ys:
-            for e in self._elements:
-                if e.get('type') == 'bar':
-                    ys.extend(e.get('height', []))
-                    ys.append(0)
-                elif 'y' in e:
-                    val = e['y']
-                    if isinstance(val, list):
-                        ys.extend(val)
+        for patch in self.patches:
+            if hasattr(patch, '_xy') and hasattr(patch, '_height'):
+                # Rectangle
+                ys.append(patch._xy[1])
+                ys.append(patch._xy[1] + patch._height)
+            elif hasattr(patch, '_xy') and isinstance(patch._xy, list):
+                # Polygon
+                for pt in patch._xy:
+                    ys.append(pt[1])
+        # Bars typically start from 0
+        if ys and any(hasattr(p, '_height') for p in self.patches):
+            ys.append(0)
         if not ys:
             return (0.0, 1.0)
         return (min(ys), max(ys))
@@ -947,8 +1022,65 @@ class Axes:
         all_artists.sort(key=lambda a: a.get_zorder())
 
         for artist in all_artists:
+            spanning = getattr(artist, '_spanning', None)
+            if spanning:
+                continue  # drawn separately below
             if hasattr(artist, 'draw') and callable(artist.draw):
                 artist.draw(renderer, layout)
+
+        # Spanning lines (axhline/axvline)
+        for line in self.lines:
+            if not line.get_visible():
+                continue
+            spanning = getattr(line, '_spanning', None)
+            if spanning == 'horizontal':
+                y_val = line._ydata[0]
+                py_val = layout.sy(y_val)
+                color = to_hex(line._color)
+                renderer.draw_line([float(px), float(px + pw)], [py_val, py_val],
+                                   color, float(line._linewidth), line._linestyle)
+            elif spanning == 'vertical':
+                x_val = line._xdata[0]
+                px_val = layout.sx(x_val)
+                color = to_hex(line._color)
+                renderer.draw_line([px_val, px_val], [float(py), float(py + ph)],
+                                   color, float(line._linewidth), line._linestyle)
+
+        # Errorbar whiskers
+        for container in self.containers:
+            yerr_data = getattr(container, '_yerr_data', None)
+            if yerr_data:
+                x_list, y_list, yerr = yerr_data
+                yerr_list = list(yerr) if hasattr(yerr, '__iter__') else [yerr] * len(x_list)
+                color = '#000000'
+                if hasattr(container, 'lines') and container.lines[0]:
+                    color = to_hex(container.lines[0]._color)
+                for i in range(len(x_list)):
+                    err = yerr_list[i] if i < len(yerr_list) else yerr_list[-1]
+                    cx = layout.sx(x_list[i])
+                    y_lo = layout.sy(y_list[i] - err)
+                    y_hi = layout.sy(y_list[i] + err)
+                    renderer.draw_line([cx, cx], [y_lo, y_hi], color, 1.0, '-')
+                    cap = 3
+                    renderer.draw_line([cx - cap, cx + cap], [y_lo, y_lo], color, 1.0, '-')
+                    renderer.draw_line([cx - cap, cx + cap], [y_hi, y_hi], color, 1.0, '-')
+
+            xerr_data = getattr(container, '_xerr_data', None)
+            if xerr_data:
+                x_list, y_list, xerr = xerr_data
+                xerr_list = list(xerr) if hasattr(xerr, '__iter__') else [xerr] * len(x_list)
+                color = '#000000'
+                if hasattr(container, 'lines') and container.lines[0]:
+                    color = to_hex(container.lines[0]._color)
+                for i in range(len(x_list)):
+                    err = xerr_list[i] if i < len(xerr_list) else xerr_list[-1]
+                    cy = layout.sy(y_list[i])
+                    x_lo = layout.sx(x_list[i] - err)
+                    x_hi = layout.sx(x_list[i] + err)
+                    renderer.draw_line([x_lo, x_hi], [cy, cy], color, 1.0, '-')
+                    cap = 3
+                    renderer.draw_line([x_lo, x_lo], [cy - cap, cy + cap], color, 1.0, '-')
+                    renderer.draw_line([x_hi, x_hi], [cy - cap, cy + cap], color, 1.0, '-')
 
         renderer.clear_clip()
 
