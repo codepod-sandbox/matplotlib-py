@@ -6,7 +6,7 @@ import math
 
 from matplotlib.colors import DEFAULT_CYCLE, to_hex, parse_fmt
 from matplotlib.lines import Line2D
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle, Polygon, Wedge
 from matplotlib.collections import PathCollection
 from matplotlib.container import BarContainer, ErrorbarContainer, StemContainer
 from matplotlib.text import Text, Annotation
@@ -381,7 +381,6 @@ class Axes:
         for i in range(len(x_list) - 1, -1, -1):
             verts.append((x_list[i], y2_list[i]))
 
-        from matplotlib.patches import Polygon
         poly = Polygon(verts, facecolor=color, edgecolor='none')
         poly.set_alpha(alpha)
         if label:
@@ -415,7 +414,6 @@ class Axes:
         for i in range(len(y_list) - 1, -1, -1):
             verts.append((x2_list[i], y_list[i]))
 
-        from matplotlib.patches import Polygon
         poly = Polygon(verts, facecolor=color, edgecolor='none')
         poly.set_alpha(alpha)
         if label:
@@ -530,7 +528,6 @@ class Axes:
 
     def stackplot(self, x, *args, labels=None, colors=None, **kwargs):
         """Stacked area plot."""
-        from matplotlib.patches import Polygon
         x_list = list(x)
         ys = [list(a) for a in args]
         n = len(x_list)
@@ -606,6 +603,88 @@ class Axes:
         sc = StemContainer((markerline, stemlines, baseline), label=label)
         self.containers.append(sc)
         return sc
+
+    def pie(self, x, labels=None, colors=None, explode=None,
+            autopct=None, startangle=0, counterclock=True, **kwargs):
+        """Pie chart."""
+        vals = list(x)
+        total = sum(vals)
+        if total == 0:
+            return [], []
+
+        n = len(vals)
+        if colors is None:
+            colors = [DEFAULT_CYCLE[i % len(DEFAULT_CYCLE)] for i in range(n)]
+        if labels is None:
+            labels = [None] * n
+        if explode is None:
+            explode = [0.0] * n
+
+        self.set_aspect('equal')
+
+        cx, cy = 0.0, 0.0
+        radius = 1.0
+
+        wedges = []
+        texts = []
+        autotexts = [] if autopct else None
+
+        angle = startangle
+        for i in range(n):
+            frac = vals[i] / total
+            sweep = frac * 360.0
+            if not counterclock:
+                sweep = -sweep
+
+            theta1 = angle
+            theta2 = angle + sweep
+
+            # Explode offset
+            if explode[i] != 0:
+                mid_angle = math.radians((theta1 + theta2) / 2)
+                dx = explode[i] * math.cos(mid_angle)
+                dy = explode[i] * math.sin(mid_angle)
+            else:
+                dx, dy = 0, 0
+
+            w = Wedge((cx + dx, cy + dy), radius, theta1, theta2,
+                      facecolor=colors[i], edgecolor='white')
+            w.axes = self
+            w.figure = self.figure
+            self.patches.append(w)
+            wedges.append(w)
+
+            # Label text at 1.2 * radius
+            if labels[i] is not None:
+                mid_angle = math.radians((theta1 + theta2) / 2)
+                lx = cx + dx + 1.2 * radius * math.cos(mid_angle)
+                ly = cy + dy + 1.2 * radius * math.sin(mid_angle)
+                ha = 'left' if math.cos(mid_angle) >= 0 else 'right'
+                t = Text(lx, ly, labels[i], ha=ha, va='center', fontsize=11)
+                t.axes = self
+                t.figure = self.figure
+                self.texts.append(t)
+                texts.append(t)
+
+            # Autopct text at 0.6 * radius
+            if autopct is not None:
+                pct = frac * 100
+                mid_angle = math.radians((theta1 + theta2) / 2)
+                px = cx + dx + 0.6 * radius * math.cos(mid_angle)
+                py = cy + dy + 0.6 * radius * math.sin(mid_angle)
+                pct_text = autopct % pct
+                at = Text(px, py, pct_text, ha='center', va='center',
+                          fontsize=10)
+                at.axes = self
+                at.figure = self.figure
+                self.texts.append(at)
+                autotexts.append(at)
+
+            angle = theta2
+
+        if autopct is not None:
+            return wedges, texts, autotexts
+        return wedges, texts
 
     def text(self, x, y, s, **kwargs):
         """Add text to the axes."""

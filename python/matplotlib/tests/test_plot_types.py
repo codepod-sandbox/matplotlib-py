@@ -212,3 +212,59 @@ class TestStem:
         fig, ax = plt.subplots()
         sc = ax.stem([1, 2], [3, 4], bottom=1)
         assert sc.baseline.get_ydata() == [1, 1]
+
+
+class TestPie:
+    def test_pie_basic(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        result = ax.pie([1, 2, 3])
+        wedges, texts = result[0], result[1]
+        assert len(wedges) == 3
+
+    def test_pie_wedge_angles_sum_to_360(self):
+        from matplotlib.patches import Wedge
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        wedges, texts = ax.pie([1, 1, 1, 1])
+        assert len(wedges) == 4
+        for w in wedges:
+            assert isinstance(w, Wedge)
+            span = w._theta2 - w._theta1
+            assert abs(span - 90.0) < 0.01
+
+    def test_pie_labels(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        wedges, texts = ax.pie([1, 2], labels=['A', 'B'])
+        assert len(texts) == 2
+        assert texts[0].get_text() == 'A'
+        assert texts[1].get_text() == 'B'
+
+    def test_pie_colors(self):
+        from matplotlib.colors import to_hex
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        wedges, texts = ax.pie([1, 1], colors=['red', 'blue'])
+        assert to_hex(wedges[0]._facecolor) == to_hex('red')
+        assert to_hex(wedges[1]._facecolor) == to_hex('blue')
+
+    def test_pie_startangle(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        wedges, texts = ax.pie([1], startangle=90)
+        assert wedges[0]._theta1 == 90
+
+    def test_pie_autopct(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        wedges, texts, autotexts = ax.pie([1, 3], autopct='%1.0f%%')
+        assert len(autotexts) == 2
+        assert autotexts[0].get_text() == '25%'
+        assert autotexts[1].get_text() == '75%'
+
+    def test_pie_sets_equal_aspect(self):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        ax.pie([1, 2, 3])
+        assert ax.get_aspect() == 'equal'
