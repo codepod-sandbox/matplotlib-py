@@ -124,6 +124,15 @@ class Text(Artist):
     def set_position(self, xy):
         self._x, self._y = xy
 
+    # --- draw (new renderer architecture) ---
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        px = layout.sx(self._x)
+        py = layout.sy(self._y)
+        renderer.draw_text(px, py, self._text, self._fontsize, '#000000',
+                           self._ha)
+
     # --- angle-based alignment helpers ---
     def _ha_for_angle(self, angle):
         """Determine horizontal alignment for rotation_mode 'xtick'."""

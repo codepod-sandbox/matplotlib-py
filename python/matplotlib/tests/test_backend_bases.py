@@ -291,3 +291,143 @@ class TestRendererPIL:
         r.draw_rect(10, 10, 50, 50, "#00f", "#00f")
         result = r.get_result()
         assert result[:4] == b'\x89PNG'
+
+
+# --- Task 4-6 tests ---
+from matplotlib.backend_bases import AxesLayout
+from matplotlib._svg_backend import RendererSVG
+from matplotlib.lines import Line2D
+from matplotlib.patches import Rectangle, Circle, Polygon
+from matplotlib.collections import PathCollection
+from matplotlib.text import Text
+
+
+class TestLine2DDraw:
+    def _layout(self):
+        return AxesLayout(plot_x=0, plot_y=0, plot_w=100, plot_h=100,
+                          xmin=0.0, xmax=10.0, ymin=0.0, ymax=10.0)
+
+    def test_draw_produces_polyline(self):
+        line = Line2D([0, 5, 10], [0, 10, 5], color='#ff0000', linewidth=2.0)
+        r = RendererSVG(100, 100, 100)
+        line.draw(r, self._layout())
+        assert '<polyline' in r.get_result()
+
+    def test_draw_with_marker(self):
+        line = Line2D([0, 10], [0, 10], color='#000', marker='o')
+        r = RendererSVG(100, 100, 100)
+        line.draw(r, self._layout())
+        assert '<circle' in r.get_result()
+
+    def test_draw_invisible(self):
+        line = Line2D([0, 10], [0, 10], color='#000')
+        line.set_visible(False)
+        r = RendererSVG(100, 100, 100)
+        line.draw(r, self._layout())
+        assert '<polyline' not in r.get_result()
+
+    def test_draw_none_linestyle(self):
+        line = Line2D([0, 10], [0, 10], color='#000', linestyle='None', marker='o')
+        r = RendererSVG(100, 100, 100)
+        line.draw(r, self._layout())
+        result = r.get_result()
+        assert '<polyline' not in result
+        assert '<circle' in result
+
+
+class TestRectangleDraw:
+    def _layout(self):
+        return AxesLayout(plot_x=0, plot_y=0, plot_w=100, plot_h=100,
+                          xmin=0.0, xmax=10.0, ymin=0.0, ymax=10.0)
+
+    def test_draw_produces_rect(self):
+        rect = Rectangle((2, 0), 3, 5, facecolor='#0000ff')
+        r = RendererSVG(100, 100, 100)
+        rect.draw(r, self._layout())
+        assert '<rect' in r.get_result()
+
+    def test_draw_invisible(self):
+        rect = Rectangle((0, 0), 5, 5)
+        rect.set_visible(False)
+        r = RendererSVG(100, 100, 100)
+        rect.draw(r, self._layout())
+        assert '<rect' not in r.get_result()
+
+
+class TestCircleDraw:
+    def _layout(self):
+        return AxesLayout(plot_x=0, plot_y=0, plot_w=100, plot_h=100,
+                          xmin=0.0, xmax=10.0, ymin=0.0, ymax=10.0)
+
+    def test_draw_produces_circle(self):
+        c = Circle((5, 5), 2, facecolor='#ff0000')
+        r = RendererSVG(100, 100, 100)
+        c.draw(r, self._layout())
+        assert '<circle' in r.get_result()
+
+
+class TestPolygonPatch:
+    def _layout(self):
+        return AxesLayout(plot_x=0, plot_y=0, plot_w=100, plot_h=100,
+                          xmin=0.0, xmax=10.0, ymin=0.0, ymax=10.0)
+
+    def test_init(self):
+        p = Polygon([(0, 0), (1, 1), (2, 0)], facecolor='#00ff00')
+        assert len(p.get_xy()) == 3
+
+    def test_draw_produces_polygon(self):
+        p = Polygon([(0, 0), (10, 10), (10, 0)], facecolor='#00ff00')
+        r = RendererSVG(100, 100, 100)
+        p.draw(r, self._layout())
+        assert '<polygon' in r.get_result()
+
+    def test_get_set_xy(self):
+        p = Polygon([(0, 0), (1, 1)])
+        p.set_xy([(2, 2), (3, 3), (4, 4)])
+        assert len(p.get_xy()) == 3
+
+
+class TestPathCollectionDraw:
+    def _layout(self):
+        return AxesLayout(plot_x=0, plot_y=0, plot_w=100, plot_h=100,
+                          xmin=0.0, xmax=10.0, ymin=0.0, ymax=10.0)
+
+    def test_draw_produces_circles(self):
+        pc = PathCollection(offsets=[(2, 3), (5, 7)], sizes=[20], facecolors=['#ff0000'])
+        r = RendererSVG(100, 100, 100)
+        pc.draw(r, self._layout())
+        assert r.get_result().count('<circle') == 2
+
+    def test_draw_empty(self):
+        pc = PathCollection(offsets=[], sizes=[20], facecolors=['#ff0000'])
+        r = RendererSVG(100, 100, 100)
+        pc.draw(r, self._layout())
+        assert '<circle' not in r.get_result()
+
+    def test_draw_invisible(self):
+        pc = PathCollection(offsets=[(5, 5)], sizes=[20], facecolors=['#ff0000'])
+        pc.set_visible(False)
+        r = RendererSVG(100, 100, 100)
+        pc.draw(r, self._layout())
+        assert '<circle' not in r.get_result()
+
+
+class TestTextDraw:
+    def _layout(self):
+        return AxesLayout(plot_x=0, plot_y=0, plot_w=100, plot_h=100,
+                          xmin=0.0, xmax=10.0, ymin=0.0, ymax=10.0)
+
+    def test_draw_produces_text(self):
+        t = Text(5, 5, 'hello')
+        r = RendererSVG(100, 100, 100)
+        t.draw(r, self._layout())
+        result = r.get_result()
+        assert 'hello' in result
+        assert '<text' in result
+
+    def test_draw_invisible(self):
+        t = Text(5, 5, 'hidden')
+        t.set_visible(False)
+        r = RendererSVG(100, 100, 100)
+        t.draw(r, self._layout())
+        assert 'hidden' not in r.get_result()

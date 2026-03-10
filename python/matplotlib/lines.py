@@ -108,6 +108,27 @@ class Line2D(Artist):
     def set_drawstyle(self, ds):
         self._drawstyle = ds
 
+    # --- draw (new renderer architecture) ---
+    def draw(self, renderer, layout):
+        """Draw this line onto the renderer."""
+        if not self.get_visible():
+            return
+        x_px = [layout.sx(v) for v in self._xdata]
+        y_px = [layout.sy(v) for v in self._ydata]
+        alpha = self.get_alpha() if self.get_alpha() is not None else 1.0
+        color = to_hex(self._color)
+
+        # Draw line (skip if no-line style)
+        if (self._linestyle not in ('None', 'none', '')
+                and len(x_px) >= 2):
+            renderer.draw_line(x_px, y_px, color,
+                               float(self._linewidth), self._linestyle)
+
+        # Draw markers
+        if self._marker and self._marker not in ('None', 'none', ''):
+            renderer.draw_markers(x_px, y_px, color,
+                                  float(self._markersize))
+
     # --- backend-compatible dict ---
     def _as_element(self):
         """Return a dict compatible with the existing backend renderers."""

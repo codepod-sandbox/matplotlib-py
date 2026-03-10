@@ -1,7 +1,7 @@
 """matplotlib.patches --- Patch, Rectangle, and Circle artists."""
 
 from matplotlib.artist import Artist
-from matplotlib.colors import to_rgba
+from matplotlib.colors import to_rgba, to_hex
 
 
 class Patch(Artist):
@@ -58,6 +58,18 @@ class Patch(Artist):
     def set_linewidth(self, w):
         self._linewidth = w
 
+    def _resolved_facecolor_hex(self):
+        fc = self._facecolor
+        if isinstance(fc, str) and fc.lower() == 'none':
+            return 'none'
+        return to_hex(fc)
+
+    def _resolved_edgecolor_hex(self):
+        ec = self._edgecolor
+        if isinstance(ec, str) and ec.lower() == 'none':
+            return 'none'
+        return to_hex(ec)
+
 
 class Rectangle(Patch):
     """A rectangle defined by an anchor point, width, and height."""
@@ -101,6 +113,24 @@ class Rectangle(Patch):
         x1, y1 = x0 + self._width, y0 + self._height
         return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
 
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        x0, y0 = self._xy
+        x1 = x0 + self._width
+        y1 = y0 + self._height
+        px_left = layout.sx(x0)
+        px_right = layout.sx(x1)
+        px_top = layout.sy(y1)      # top of data = smaller pixel y
+        px_bottom = layout.sy(y0)   # bottom of data = larger pixel y
+        pw = px_right - px_left
+        ph = px_bottom - px_top
+        if pw <= 0 or ph <= 0:
+            return
+        renderer.draw_rect(px_left, px_top, pw, ph,
+                           self._resolved_edgecolor_hex(),
+                           self._resolved_facecolor_hex())
+
 
 class Circle(Patch):
     """A circle defined by a center point and radius."""
@@ -121,3 +151,42 @@ class Circle(Patch):
 
     def set_radius(self, radius):
         self._radius = radius
+
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        cx_px = layout.sx(self._center[0])
+        cy_px = layout.sy(self._center[1])
+        r_px = abs(layout.sx(self._center[0] + self._radius) - cx_px)
+        if r_px <= 0:
+            return
+        renderer.draw_circle(cx_px, cy_px, r_px,
+                             self._resolved_facecolor_hex())
+
+
+class Polygon(Patch):
+    """A polygon defined by a list of (x, y) vertices."""
+
+    def __init__(self, xy, closed=True, **kwargs):
+        self._xy = [tuple(pt) for pt in xy]
+        self._closed = closed
+        super().__init__(**kwargs)
+
+    def get_xy(self):
+        return list(self._xy)
+
+    def set_xy(self, xy):
+        self._xy = [tuple(pt) for pt in xy]
+
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        if len(self._xy) < 3:
+            return
+        x_px = [layout.sx(pt[0]) for pt in self._xy]
+        y_px = [layout.sy(pt[1]) for pt in self._xy]
+        alpha = self.get_alpha() if self.get_alpha() is not None else 1.0
+        points = list(zip(x_px, y_px))
+        renderer.draw_polygon(points,
+                              self._resolved_facecolor_hex(),
+                              alpha)

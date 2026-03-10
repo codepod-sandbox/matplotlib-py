@@ -58,6 +58,21 @@ class PathCollection(Collection):
     def set_edgecolors(self, colors):
         self._edgecolors = list(colors)
 
+    # --- draw (new renderer architecture) ---
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        if not self._offsets:
+            return
+        import math
+        color = to_hex(self._facecolors[0]) if self._facecolors else to_hex('C0')
+        s = self._sizes[0] if self._sizes else 20.0
+        r = max(1.0, math.sqrt(s) / 2)
+        for pt in self._offsets:
+            cx = layout.sx(pt[0])
+            cy = layout.sy(pt[1])
+            renderer.draw_circle(cx, cy, r, color)
+
     # --- backend-compatible dict ---
     def _as_element(self):
         """Return a dict compatible with the existing backend renderers."""
