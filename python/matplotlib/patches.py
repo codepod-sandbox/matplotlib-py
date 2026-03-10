@@ -190,3 +190,42 @@ class Polygon(Patch):
         renderer.draw_polygon(points,
                               self._resolved_facecolor_hex(),
                               alpha)
+
+
+class Wedge(Patch):
+    """A wedge (pie slice) defined by center, radius, and two angles."""
+
+    def __init__(self, center, r, theta1, theta2, **kwargs):
+        self._center = tuple(center)
+        self._r = r
+        self._theta1 = theta1  # start angle in degrees
+        self._theta2 = theta2  # end angle in degrees
+        super().__init__(**kwargs)
+
+    def get_center(self):
+        return self._center
+
+    def set_center(self, center):
+        self._center = tuple(center)
+
+    def get_r(self):
+        return self._r
+
+    def get_theta1(self):
+        return self._theta1
+
+    def get_theta2(self):
+        return self._theta2
+
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        cx_px = layout.sx(self._center[0])
+        cy_px = layout.sy(self._center[1])
+        edge_px = layout.sx(self._center[0] + self._r)
+        r_px = abs(edge_px - cx_px)
+        if r_px <= 0:
+            return
+        renderer.draw_wedge(cx_px, cy_px, r_px,
+                            self._theta1, self._theta2,
+                            self._resolved_facecolor_hex())

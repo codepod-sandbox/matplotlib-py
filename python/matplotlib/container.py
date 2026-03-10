@@ -74,3 +74,18 @@ class ErrorbarContainer(Container):
     @property
     def has_yerr(self):
         return self._has_yerr
+
+
+class StemContainer(Container):
+    """Container for stem plot artists (markerline, stemlines, baseline)."""
+
+    def __new__(cls, markerline_stemlines_baseline, label=None):
+        return super().__new__(cls, markerline_stemlines_baseline)
+
+    def __init__(self, markerline_stemlines_baseline, label=None):
+        super().__init__(markerline_stemlines_baseline)
+        self.markerline = markerline_stemlines_baseline[0]
+        self.stemlines = markerline_stemlines_baseline[1]
+        self.baseline = markerline_stemlines_baseline[2]
+        if label is not None:
+            self.set_label(label)
