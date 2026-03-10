@@ -3,6 +3,94 @@ matplotlib._svg_backend — render a Figure to an SVG string.
 """
 
 from matplotlib.colors import to_hex, to_rgb
+from matplotlib.backend_bases import RendererBase
+
+
+class RendererSVG(RendererBase):
+    """SVG renderer that accumulates SVG fragments in a list."""
+
+    def __init__(self, width, height, dpi):
+        super().__init__(width, height, dpi)
+        self._parts = []
+        self._clip_id = None
+        self._clip_counter = 0
+
+    def draw_line(self, xdata, ydata, color, linewidth, linestyle):
+        dash = _svg_dash(linestyle)
+        points = ' '.join(
+            f'{xdata[i]:.2f},{ydata[i]:.2f}' for i in range(len(xdata))
+        )
+        clip = self._clip_attr()
+        self._parts.append(
+            f'<polyline points="{points}" fill="none" '
+            f'stroke="{color}" stroke-width="{linewidth}"{dash}{clip}/>'
+        )
+
+    def draw_markers(self, xdata, ydata, color, size):
+        clip = self._clip_attr()
+        for i in range(len(xdata)):
+            self._parts.append(
+                f'<circle cx="{xdata[i]:.2f}" cy="{ydata[i]:.2f}" '
+                f'r="{size}" fill="{color}"{clip}/>'
+            )
+
+    def draw_rect(self, x, y, width, height, stroke, fill):
+        fill_attr = fill if fill else "none"
+        stroke_attr = stroke if stroke else "none"
+        clip = self._clip_attr()
+        self._parts.append(
+            f'<rect x="{x}" y="{y}" width="{width}" height="{height}" '
+            f'fill="{fill_attr}" stroke="{stroke_attr}"{clip}/>'
+        )
+
+    def draw_circle(self, cx, cy, r, color):
+        clip = self._clip_attr()
+        self._parts.append(
+            f'<circle cx="{cx}" cy="{cy}" r="{r}" fill="{color}"{clip}/>'
+        )
+
+    def draw_polygon(self, points, color, alpha):
+        pts = ' '.join(f'{x},{y}' for x, y in points)
+        clip = self._clip_attr()
+        self._parts.append(
+            f'<polygon points="{pts}" fill="{color}" '
+            f'fill-opacity="{alpha}" stroke="none"{clip}/>'
+        )
+
+    def draw_text(self, x, y, text, fontsize, color, ha):
+        anchor_map = {"left": "start", "center": "middle", "right": "end"}
+        anchor = anchor_map.get(ha, "start")
+        clip = self._clip_attr()
+        self._parts.append(
+            f'<text x="{x}" y="{y}" font-size="{fontsize}" '
+            f'fill="{color}" text-anchor="{anchor}"{clip}>'
+            f'{_esc(text)}</text>'
+        )
+
+    def set_clip_rect(self, x, y, width, height):
+        self._clip_counter += 1
+        self._clip_id = f'clip-{self._clip_counter}'
+        self._parts.append(
+            f'<defs><clipPath id="{self._clip_id}">'
+            f'<rect x="{x}" y="{y}" width="{width}" height="{height}"/>'
+            f'</clipPath></defs>'
+        )
+
+    def clear_clip(self):
+        self._clip_id = None
+
+    def get_result(self):
+        header = (
+            f'<svg xmlns="http://www.w3.org/2000/svg" '
+            f'width="{self.width}" height="{self.height}" '
+            f'viewBox="0 0 {self.width} {self.height}">'
+        )
+        return '\n'.join([header] + self._parts + ['</svg>'])
+
+    def _clip_attr(self):
+        if self._clip_id:
+            return f' clip-path="url(#{self._clip_id})"'
+        return ''
 
 
 def render_figure_svg(fig):
