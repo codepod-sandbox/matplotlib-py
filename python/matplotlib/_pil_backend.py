@@ -22,7 +22,7 @@ class RendererPIL(RendererBase):
         self._img = Image.new('RGB', (width, height), (255, 255, 255))
         self._draw = ImageDraw.Draw(self._img)
 
-    def draw_line(self, xdata, ydata, color, linewidth, linestyle):
+    def draw_line(self, xdata, ydata, color, linewidth, linestyle, opacity=1.0):
         col = _to_rgb_255(color)
         lw = max(1, int(linewidth))
         for i in range(len(xdata) - 1):

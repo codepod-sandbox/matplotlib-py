@@ -15,15 +15,16 @@ class RendererSVG(RendererBase):
         self._clip_id = None
         self._clip_counter = 0
 
-    def draw_line(self, xdata, ydata, color, linewidth, linestyle):
+    def draw_line(self, xdata, ydata, color, linewidth, linestyle, opacity=1.0):
         dash = _svg_dash(linestyle)
         points = ' '.join(
             f'{xdata[i]:.2f},{ydata[i]:.2f}' for i in range(len(xdata))
         )
         clip = self._clip_attr()
+        opacity_attr = f' opacity="{opacity}"' if opacity < 1.0 else ''
         self._parts.append(
             f'<polyline points="{points}" fill="none" '
-            f'stroke="{color}" stroke-width="{linewidth}"{dash}{clip}/>'
+            f'stroke="{color}" stroke-width="{linewidth}"{dash}{opacity_attr}{clip}/>'
         )
 
     def draw_markers(self, xdata, ydata, color, size):

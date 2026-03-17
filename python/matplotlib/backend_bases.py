@@ -70,7 +70,7 @@ class RendererBase:
         self.height = height
         self.dpi = dpi
 
-    def draw_line(self, xdata, ydata, color, linewidth, linestyle):
+    def draw_line(self, xdata, ydata, color, linewidth, linestyle, opacity=1.0):
         raise NotImplementedError
 
     def draw_markers(self, xdata, ydata, color, size):

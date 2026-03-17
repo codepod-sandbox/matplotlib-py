@@ -89,6 +89,9 @@ class Axes:
             marker=marker if marker is not None else 'None',
             label=label,
         )
+        alpha = kwargs.get('alpha')
+        if alpha is not None:
+            line.set_alpha(alpha)
         line.axes = self
         line.figure = self.figure
 
