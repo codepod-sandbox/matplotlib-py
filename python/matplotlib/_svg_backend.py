@@ -157,15 +157,38 @@ class RendererSVG(RendererBase):
         return ''
 
 
+# Named style → (on, off, ...) dash sequences
+_NAMED_DASHES = {
+    'solid': None,
+    '-': None,
+    'dashed': (6, 3),
+    '--': (6, 3),
+    'dotted': (2, 2),
+    ':': (2, 2),
+    'dashdot': (6, 2, 2, 2),
+    '-.': (6, 2, 2, 2),
+    'loosely dashed': (6, 6),
+    'densely dashed': (4, 1),
+    'loosely dotted': (2, 4),
+    'densely dotted': (1, 1),
+    'loosely dashdotted': (6, 4, 2, 4),
+    'densely dashdotted': (4, 1, 2, 1),
+}
+
+
 def _svg_dash(ls):
     """Return SVG stroke-dasharray attribute string for a linestyle."""
-    if ls == '--' or ls == 'dashed':
-        return ' stroke-dasharray="6,3"'
-    elif ls == ':' or ls == 'dotted':
-        return ' stroke-dasharray="2,2"'
-    elif ls == '-.' or ls == 'dashdot':
-        return ' stroke-dasharray="6,2,2,2"'
-    return ''
+    if isinstance(ls, tuple):
+        # (offset, (on, off, ...)) format
+        offset, dashes = ls
+        dash_str = ','.join(str(d) for d in dashes)
+        return f' stroke-dasharray="{dash_str}"'
+
+    seq = _NAMED_DASHES.get(ls)
+    if seq is None:
+        return ''  # solid or unknown → no dasharray
+    dash_str = ','.join(str(d) for d in seq)
+    return f' stroke-dasharray="{dash_str}"'
 
 
 def _nice_ticks(lo, hi, target_count):
