@@ -168,8 +168,29 @@ class Annotation(Text):
         super().__init__(x=self.xytext[0], y=self.xytext[1], text=text,
                          **kwargs)
 
-        # arrow_patch: None when no arrowprops, otherwise a Patch placeholder
+        self._arrowprops = arrowprops
+        # arrow_patch is non-None iff arrowprops was given — kept as a Patch
+        # sentinel for backward compat; actual drawing uses _arrowprops
         if arrowprops is not None:
             self.arrow_patch = Patch()
         else:
             self.arrow_patch = None
+
+    def draw(self, renderer, layout):
+        """Draw text and optional arrow."""
+        if not self.get_visible():
+            return
+        super().draw(renderer, layout)
+        if self.arrow_patch is not None and self._arrowprops is not None:
+            from matplotlib.patches import FancyArrowPatch
+            props = self._arrowprops if isinstance(self._arrowprops, dict) else {}
+            arrowstyle = props.get('arrowstyle', '->')
+            color = props.get('color', props.get('ec', '#000000'))
+            linewidth = props.get('linewidth', props.get('lw', 1.5))
+            patch = FancyArrowPatch(
+                self.xytext, self.xy,
+                arrowstyle=arrowstyle,
+                color=color,
+                linewidth=linewidth,
+            )
+            patch.draw(renderer, layout)

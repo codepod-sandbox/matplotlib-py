@@ -192,6 +192,47 @@ class Polygon(Patch):
                               alpha)
 
 
+class FancyArrowPatch(Artist):
+    """A simplified arrow patch from posA to posB in data coordinates."""
+
+    zorder = 2
+
+    def __init__(self, posA, posB, arrowstyle='->', color='black',
+                 linewidth=1.5, shrinkA=0.0, shrinkB=0.0, **kwargs):
+        super().__init__()
+        self._posA = tuple(posA)
+        self._posB = tuple(posB)
+        self._arrowstyle = arrowstyle
+        self._color = color
+        self._linewidth = linewidth
+        self._shrinkA = shrinkA
+        self._shrinkB = shrinkB
+
+    def get_arrowstyle(self):
+        return self._arrowstyle
+
+    def draw(self, renderer, layout):
+        if not self.get_visible():
+            return
+        import math
+        x1, y1 = layout.sx(self._posA[0]), layout.sy(self._posA[1])
+        x2, y2 = layout.sx(self._posB[0]), layout.sy(self._posB[1])
+
+        # Apply shrink
+        dx, dy = x2 - x1, y2 - y1
+        length = math.hypot(dx, dy)
+        if length > 1e-6 and (self._shrinkA or self._shrinkB):
+            ux, uy = dx / length, dy / length
+            x1 += ux * self._shrinkA
+            y1 += uy * self._shrinkA
+            x2 -= ux * self._shrinkB
+            y2 -= uy * self._shrinkB
+
+        color = to_hex(self._color)
+        renderer.draw_arrow(x1, y1, x2, y2,
+                            self._arrowstyle, color, self._linewidth)
+
+
 class Wedge(Patch):
     """A wedge (pie slice) defined by center, radius, and two angles."""
 
