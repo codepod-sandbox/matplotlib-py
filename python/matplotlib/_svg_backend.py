@@ -182,7 +182,8 @@ def _svg_dash(ls):
         # (offset, (on, off, ...)) format
         offset, dashes = ls
         dash_str = ','.join(str(d) for d in dashes)
-        return f' stroke-dasharray="{dash_str}"'
+        offset_attr = f' stroke-dashoffset="{offset}"' if offset else ''
+        return f' stroke-dasharray="{dash_str}"{offset_attr}'
 
     seq = _NAMED_DASHES.get(ls)
     if seq is None:

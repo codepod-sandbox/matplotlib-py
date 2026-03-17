@@ -159,7 +159,7 @@ class Legend:
 
             renderer.draw_line(
                 [ex, ex + _SWATCH_W - 4], [ey, ey],
-                color, 2.0, '-',
+                color, 2.0, '-', opacity=1.0,
             )
             renderer.draw_text(
                 ex + _SWATCH_W, ey + 4,

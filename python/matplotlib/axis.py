@@ -55,6 +55,7 @@ class Axis:
 
     def set_major_locator(self, locator):
         self._major.locator = locator
+        self._major.formatter = ScalarFormatter()
         self._ticks = None  # clear fixed ticks
 
     def get_major_formatter(self):
