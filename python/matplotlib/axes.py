@@ -11,7 +11,8 @@ from matplotlib.collections import PathCollection
 from matplotlib.container import BarContainer, ErrorbarContainer, StemContainer
 from matplotlib.text import Text, Annotation
 from matplotlib.backend_bases import AxesLayout
-from matplotlib._svg_backend import _nice_ticks, _fmt_tick, _esc
+from matplotlib.axis import XAxis, YAxis
+from matplotlib.ticker import FixedFormatter
 
 
 class Axes:
@@ -25,10 +26,8 @@ class Axes:
         self._ylabel = ''
         self._xlim = None
         self._ylim = None
-        self._xticks = None
-        self._yticks = None
-        self._xticklabels = None
-        self._yticklabels = None
+        self.xaxis = XAxis()
+        self.yaxis = YAxis()
         self._grid = False
         self._legend = False
         self._color_idx = 0
@@ -1224,26 +1223,22 @@ class Axes:
         return (min(ys), max(ys))
 
     def set_xticks(self, ticks, labels=None, **kwargs):
-        self._xticks = list(ticks)
-        if labels is not None:
-            self._xticklabels = list(labels)
+        self.xaxis.set_ticks(ticks, labels)
 
     def get_xticks(self):
-        return self._xticks if self._xticks is not None else []
+        return self.xaxis.get_ticks()
 
     def set_yticks(self, ticks, labels=None, **kwargs):
-        self._yticks = list(ticks)
-        if labels is not None:
-            self._yticklabels = list(labels)
+        self.yaxis.set_ticks(ticks, labels)
 
     def get_yticks(self):
-        return self._yticks if self._yticks is not None else []
+        return self.yaxis.get_ticks()
 
     def set_xticklabels(self, labels, **kwargs):
-        self._xticklabels = list(labels)
+        self.xaxis.set_major_formatter(FixedFormatter(list(labels)))
 
     def set_yticklabels(self, labels, **kwargs):
-        self._yticklabels = list(labels)
+        self.yaxis.set_major_formatter(FixedFormatter(list(labels)))
 
     def tick_params(self, **kwargs):
         # No-op compatibility shim.
@@ -1457,39 +1452,41 @@ class Axes:
         # Frame border
         renderer.draw_rect(px, py, pw, ph, '#000000', 'none')
 
+        # Compute tick positions ONCE — used for both grid and tick marks
+        xtick_vals = self.xaxis.tick_values(layout.xmin, layout.xmax)
+        ytick_vals = self.yaxis.tick_values(layout.ymin, layout.ymax)
+        xtick_labels = self.xaxis.format_ticks(xtick_vals)
+        ytick_labels = self.yaxis.format_ticks(ytick_vals)
+
         # Grid
         if self._grid:
-            xticks = _nice_ticks(layout.xmin, layout.xmax, 8)
-            yticks = _nice_ticks(layout.ymin, layout.ymax, 6)
-            for t in xticks:
+            for t in xtick_vals:
                 tx = layout.sx(t)
                 if px < tx < px + pw:
                     renderer.draw_line([tx, tx], [py, py + ph],
                                        '#dddddd', 0.5, '--')
-            for t in yticks:
+            for t in ytick_vals:
                 ty = layout.sy(t)
                 if py < ty < py + ph:
                     renderer.draw_line([px, px + pw], [ty, ty],
                                        '#dddddd', 0.5, '--')
 
         # Tick marks + labels
-        xticks = _nice_ticks(layout.xmin, layout.xmax, 8)
-        yticks = _nice_ticks(layout.ymin, layout.ymax, 6)
-        for t in xticks:
+        for t, label in zip(xtick_vals, xtick_labels):
             tx = layout.sx(t)
             if px <= tx <= px + pw:
                 renderer.draw_line([tx, tx], [py + ph, py + ph + 5],
                                    '#000000', 1.0, '-')
                 if self._xticklabels_visible:
-                    renderer.draw_text(tx, py + ph + 18, _fmt_tick(t),
+                    renderer.draw_text(tx, py + ph + 18, label,
                                        11, '#333333', 'center')
-        for t in yticks:
+        for t, label in zip(ytick_vals, ytick_labels):
             ty = layout.sy(t)
             if py <= ty <= py + ph:
                 renderer.draw_line([px - 5, px], [ty, ty],
                                    '#000000', 1.0, '-')
                 if self._yticklabels_visible:
-                    renderer.draw_text(px - 8, ty + 4, _fmt_tick(t),
+                    renderer.draw_text(px - 8, ty + 4, label,
                                        11, '#333333', 'right')
 
         # Clip for data area
@@ -1627,10 +1624,8 @@ class Axes:
         self._ylabel = ''
         self._xlim = None
         self._ylim = None
-        self._xticks = None
-        self._yticks = None
-        self._xticklabels = None
-        self._yticklabels = None
+        self.xaxis = XAxis()
+        self.yaxis = YAxis()
         self._grid = False
         self._legend = False
         self._color_idx = 0

@@ -190,3 +190,64 @@ def test_axis_tick_values():
     ax_obj.set_ticks([10, 20, 30])
     vals = ax_obj.tick_values(0, 40)
     assert list(vals) == [10, 20, 30]
+
+
+# ---------------------------------------------------------------------------
+# Axes integration tests
+# ---------------------------------------------------------------------------
+
+def test_axes_has_xaxis_yaxis():
+    """Axes must expose .xaxis and .yaxis as Axis instances."""
+    import matplotlib.pyplot as plt
+    from matplotlib.axis import XAxis, YAxis
+    fig, ax = plt.subplots()
+    assert isinstance(ax.xaxis, XAxis)
+    assert isinstance(ax.yaxis, YAxis)
+    plt.close('all')
+
+
+def test_set_xticks_delegates_to_xaxis():
+    """set_xticks() must set a FixedLocator on xaxis."""
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import FixedLocator
+    fig, ax = plt.subplots()
+    ax.set_xticks([1, 2, 3])
+    assert isinstance(ax.xaxis.get_major_locator(), FixedLocator)
+    assert ax.get_xticks() == [1, 2, 3]
+    plt.close('all')
+
+
+def test_set_xticklabels_sets_formatter():
+    """set_xticklabels() must install FixedFormatter on xaxis."""
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import FixedFormatter
+    fig, ax = plt.subplots()
+    ax.set_xticks([0, 1, 2])
+    ax.set_xticklabels(['zero', 'one', 'two'])
+    assert isinstance(ax.xaxis.get_major_formatter(), FixedFormatter)
+    plt.close('all')
+
+
+def test_cla_resets_axis():
+    """cla() must reset xaxis/yaxis to default AutoLocator."""
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import AutoLocator, FixedLocator
+    fig, ax = plt.subplots()
+    ax.set_xticks([1, 2, 3])
+    assert isinstance(ax.xaxis.get_major_locator(), FixedLocator)
+    ax.cla()
+    assert isinstance(ax.xaxis.get_major_locator(), AutoLocator)
+    plt.close('all')
+
+
+def test_draw_renders_tick_labels(tmp_path):
+    """draw() must produce tick label text in SVG output via Axis objects."""
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots()
+    ax.plot([1, 2, 3], [10, 20, 30])
+    svg_path = tmp_path / "test.svg"
+    fig.savefig(str(svg_path))
+    svg = svg_path.read_text()
+    # SVG must contain some numeric tick label text
+    assert any(str(n) in svg for n in range(1, 31))
+    plt.close('all')

@@ -74,6 +74,17 @@ class Axis:
     def format_ticks(self, values):
         """Format a sequence of tick values using the major formatter."""
         fmt = self._major.formatter
+        # ScalarFormatter (and some others) need set_locs + a view interval
+        # to choose the right number of significant digits.
+        if hasattr(fmt, 'set_locs'):
+            if fmt.axis is None:
+                fmt.create_dummy_axis()
+            vals_list = list(values)
+            if vals_list:
+                vmin, vmax = min(vals_list), max(vals_list)
+                fmt.axis.set_view_interval(vmin, vmax)
+                fmt.axis.set_data_interval(vmin, vmax)
+            fmt.set_locs(vals_list)
         return [fmt(v, i) for i, v in enumerate(values)]
 
 
