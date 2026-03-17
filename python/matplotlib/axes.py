@@ -1278,13 +1278,57 @@ class Axes:
     # Scale
     # ------------------------------------------------------------------
 
-    def set_xscale(self, scale):
-        """Set the x-axis scale (e.g. 'linear', 'log')."""
-        self._xscale = scale
+    def set_xscale(self, scale, **kwargs):
+        """Set the x-axis scale ('linear', 'log', 'symlog', or a Scale object)."""
+        from matplotlib.scale import (LinearScale, LogScale,
+                                       SymmetricalLogScale, FuncScale)
+        if isinstance(scale, str):
+            if scale == 'linear':
+                scale_obj = LinearScale()
+            elif scale == 'log':
+                scale_obj = LogScale(base=kwargs.get('base', 10.0),
+                                     nonpositive=kwargs.get('nonpositive', 'mask'))
+            elif scale == 'symlog':
+                scale_obj = SymmetricalLogScale(
+                    base=kwargs.get('base', 10.0),
+                    linthresh=kwargs.get('linthresh', 2.0),
+                    linscale=kwargs.get('linscale', 1.0))
+            else:
+                raise ValueError(f"Unknown scale: {scale!r}")
+        elif isinstance(scale, (LinearScale, LogScale,
+                                 SymmetricalLogScale, FuncScale)):
+            scale_obj = scale
+        else:
+            raise TypeError(f"scale must be a string or Scale object, "
+                            f"got {type(scale)}")
+        self._xscale = scale if isinstance(scale, str) else 'custom'
+        self.xaxis.set_scale(scale_obj)
 
-    def set_yscale(self, scale):
-        """Set the y-axis scale (e.g. 'linear', 'log')."""
-        self._yscale = scale
+    def set_yscale(self, scale, **kwargs):
+        """Set the y-axis scale ('linear', 'log', 'symlog', or a Scale object)."""
+        from matplotlib.scale import (LinearScale, LogScale,
+                                       SymmetricalLogScale, FuncScale)
+        if isinstance(scale, str):
+            if scale == 'linear':
+                scale_obj = LinearScale()
+            elif scale == 'log':
+                scale_obj = LogScale(base=kwargs.get('base', 10.0),
+                                     nonpositive=kwargs.get('nonpositive', 'mask'))
+            elif scale == 'symlog':
+                scale_obj = SymmetricalLogScale(
+                    base=kwargs.get('base', 10.0),
+                    linthresh=kwargs.get('linthresh', 2.0),
+                    linscale=kwargs.get('linscale', 1.0))
+            else:
+                raise ValueError(f"Unknown scale: {scale!r}")
+        elif isinstance(scale, (LinearScale, LogScale,
+                                 SymmetricalLogScale, FuncScale)):
+            scale_obj = scale
+        else:
+            raise TypeError(f"scale must be a string or Scale object, "
+                            f"got {type(scale)}")
+        self._yscale = scale if isinstance(scale, str) else 'custom'
+        self.yaxis.set_scale(scale_obj)
 
     def get_xscale(self):
         """Return the x-axis scale."""
@@ -1440,7 +1484,9 @@ class Axes:
         ymin -= dy * 0.05
         ymax += dy * 0.05
 
-        return AxesLayout(plot_x, plot_y, plot_w, plot_h, xmin, xmax, ymin, ymax)
+        return AxesLayout(plot_x, plot_y, plot_w, plot_h, xmin, xmax, ymin, ymax,
+                          xscale=self.xaxis.get_scale(),
+                          yscale=self.yaxis.get_scale())
 
     def draw(self, renderer):
         layout = self._compute_layout(renderer.width, renderer.height)

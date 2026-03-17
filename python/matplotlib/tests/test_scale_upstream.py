@@ -61,3 +61,65 @@ def test_func_scale():
     result = s.forward(vals)
     np.testing.assert_allclose(result, [1.0, 2.0, 3.0])
     np.testing.assert_allclose(s.inverse(result), vals)
+
+
+def test_set_xscale_log_changes_locator():
+    """ax.set_xscale('log') must install LogLocator on xaxis."""
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import LogLocator
+    from matplotlib.scale import LogScale
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    assert isinstance(ax.xaxis.get_scale(), LogScale)
+    assert isinstance(ax.xaxis.get_major_locator(), LogLocator)
+    plt.close('all')
+
+
+def test_set_xscale_linear_is_default():
+    """ax.set_xscale('linear') (or default) uses LinearScale."""
+    import matplotlib.pyplot as plt
+    from matplotlib.scale import LinearScale
+    fig, ax = plt.subplots()
+    assert isinstance(ax.xaxis.get_scale(), LinearScale)
+    plt.close('all')
+
+
+def test_axes_layout_sx_linear():
+    """AxesLayout.sx with linear scale behaves as before."""
+    from matplotlib.backend_bases import AxesLayout
+    from matplotlib.scale import LinearScale
+    layout = AxesLayout(0, 0, 100, 100, 0, 10, 0, 10,
+                        LinearScale(), LinearScale())
+    assert abs(layout.sx(5) - 50) < 0.01
+
+
+def test_axes_layout_sx_log():
+    """AxesLayout.sx with LogScale maps in log space."""
+    from matplotlib.backend_bases import AxesLayout
+    from matplotlib.scale import LogScale
+    s = LogScale(base=10)
+    # data range: [1, 100]; forward: [0, 2]
+    layout = AxesLayout(0, 0, 200, 100, 1, 100, 1, 10,
+                        s, LogScale(base=10))
+    # sx(10) → forward(10)=1.0, linear map [0,2]→[0,200] → 100
+    assert abs(layout.sx(10) - 100) < 0.5
+
+
+def test_axes_layout_backward_compat_no_scales():
+    """AxesLayout constructed without scale args must work as before."""
+    from matplotlib.backend_bases import AxesLayout
+    layout = AxesLayout(0, 0, 100, 100, 0, 10, 0, 10)
+    assert abs(layout.sx(5) - 50) < 0.01
+    assert abs(layout.sy(5) - 50) < 0.01
+
+
+def test_cla_resets_scale():
+    """cla() must reset axis scale to LinearScale and _xscale to 'linear'."""
+    import matplotlib.pyplot as plt
+    from matplotlib.scale import LinearScale
+    fig, ax = plt.subplots()
+    ax.set_xscale('log')
+    ax.cla()
+    assert isinstance(ax.xaxis.get_scale(), LinearScale)
+    assert ax.get_xscale() == 'linear'
+    plt.close('all')

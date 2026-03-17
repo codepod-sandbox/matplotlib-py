@@ -7,6 +7,7 @@ from matplotlib.ticker import (
     FixedLocator, FixedFormatter,
     NullLocator, NullFormatter,
 )
+from matplotlib.scale import LinearScale
 
 
 class _TickerPair:
@@ -24,6 +25,29 @@ class Axis:
         self._major = _TickerPair(AutoLocator(), ScalarFormatter())
         self._minor = _TickerPair(NullLocator(), NullFormatter())
         self._ticks = None   # None means "use locator"; list means "fixed"
+        self._scale = LinearScale()
+
+    # --- scale ---
+    def get_scale(self):
+        return self._scale
+
+    def set_scale(self, scale):
+        """Set scale object and update default locator/formatter."""
+        from matplotlib.scale import LogScale, SymmetricalLogScale
+        from matplotlib.ticker import (LogLocator, LogFormatter,
+                                        SymmetricalLogLocator)
+        self._scale = scale
+        if isinstance(scale, LogScale):
+            self._major.locator = LogLocator(base=scale.base)
+            self._major.formatter = LogFormatter(base=scale.base)
+        elif isinstance(scale, SymmetricalLogScale):
+            self._major.locator = SymmetricalLogLocator(
+                base=scale.base, linthresh=scale.linthresh)
+            self._major.formatter = ScalarFormatter()
+        else:
+            # LinearScale or FuncScale
+            self._major.locator = AutoLocator()
+            self._major.formatter = ScalarFormatter()
 
     # --- major ---
     def get_major_locator(self):
