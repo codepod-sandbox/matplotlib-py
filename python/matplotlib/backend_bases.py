@@ -97,5 +97,13 @@ class RendererBase:
     def clear_clip(self):
         raise NotImplementedError
 
+    def draw_arrow(self, x1, y1, x2, y2, arrowstyle, color, linewidth):
+        """Draw an arrow from (x1,y1) to (x2,y2).
+
+        arrowstyle : str
+            One of '->', '<-', '<->', '-', 'fancy'.
+        """
+        raise NotImplementedError
+
     def get_result(self):
         raise NotImplementedError

@@ -95,6 +95,41 @@ class RendererSVG(RendererBase):
             f'{_esc(text)}</text>'
         )
 
+    def draw_arrow(self, x1, y1, x2, y2, arrowstyle, color, linewidth):
+        """Draw an arrow using SVG path with marker-end for arrowhead."""
+        arrow_id = f'arrow-{len(self._parts)}'
+        has_end = arrowstyle in ('->', '<->', 'fancy')
+        has_start = arrowstyle in ('<-', '<->')
+
+        if has_end or has_start:
+            # Define a simple triangle arrowhead marker
+            marker = (
+                f'<defs>'
+                f'<marker id="{arrow_id}-end" markerWidth="8" markerHeight="6" '
+                f'refX="7" refY="3" orient="auto">'
+                f'<polygon points="0 0, 8 3, 0 6" fill="{color}"/>'
+                f'</marker>'
+            )
+            if has_start:
+                marker += (
+                    f'<marker id="{arrow_id}-start" markerWidth="8" markerHeight="6" '
+                    f'refX="1" refY="3" orient="auto-start-reverse">'
+                    f'<polygon points="0 0, 8 3, 0 6" fill="{color}"/>'
+                    f'</marker>'
+                )
+            marker += '</defs>'
+            self._parts.append(marker)
+
+        attrs = f'stroke="{color}" stroke-width="{linewidth}" fill="none"'
+        if has_end:
+            attrs += f' marker-end="url(#{arrow_id}-end)"'
+        if has_start:
+            attrs += f' marker-start="url(#{arrow_id}-start)"'
+
+        self._parts.append(
+            f'<line x1="{x1:.2f}" y1="{y1:.2f}" x2="{x2:.2f}" y2="{y2:.2f}" {attrs}/>'
+        )
+
     def set_clip_rect(self, x, y, width, height):
         self._clip_counter += 1
         self._clip_id = f'clip-{self._clip_counter}'

@@ -94,6 +94,45 @@ class RendererPIL(RendererBase):
         col = _to_rgb_255(color)
         self._draw.text((int(x), int(y)), str(text), fill=col)
 
+    def draw_arrow(self, x1, y1, x2, y2, arrowstyle, color, linewidth):
+        """Draw arrow: line + arrowhead polygon."""
+        import math
+        col = _to_rgb_255(color)
+        lw = max(1, int(linewidth))
+
+        # Draw the shaft
+        self._draw.line([(int(x1), int(y1)), (int(x2), int(y2))],
+                        fill=col, width=lw)
+
+        has_end = arrowstyle in ('->', '<->', 'fancy')
+        has_start = arrowstyle in ('<-', '<->')
+
+        head_len = max(8, lw * 4)
+        head_w = max(4, lw * 2)
+
+        def _arrowhead(tx, ty, fx, fy):
+            """Draw a filled triangle arrowhead at (tx,ty) pointing away from (fx,fy)."""
+            dx = tx - fx
+            dy = ty - fy
+            length = math.hypot(dx, dy)
+            if length < 1e-6:
+                return
+            ux, uy = dx / length, dy / length
+            px, py = -uy, ux  # perpendicular
+            tip = (int(tx), int(ty))
+            base1 = (int(tx - ux * head_len + px * head_w),
+                     int(ty - uy * head_len + py * head_w))
+            base2 = (int(tx - ux * head_len - px * head_w),
+                     int(ty - uy * head_len - py * head_w))
+            self._draw.line([tip, base1], fill=col, width=lw)
+            self._draw.line([tip, base2], fill=col, width=lw)
+            self._draw.line([base1, base2], fill=col, width=lw)
+
+        if has_end:
+            _arrowhead(x2, y2, x1, y1)
+        if has_start:
+            _arrowhead(x1, y1, x2, y2)
+
     def set_clip_rect(self, x, y, width, height):
         # PIL doesn't support clipping natively; store for potential future use
         self._clip = (x, y, width, height)
