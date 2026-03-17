@@ -11,6 +11,7 @@ class Artist:
         self._alpha = None
         self._label = ''
         self._zorder = self.__class__.zorder
+        self._clip_on = True
         self.figure = None
         self.axes = None
         self._stale = True
@@ -20,6 +21,12 @@ class Artist:
 
     def set_visible(self, b):
         self._visible = b
+
+    def get_clip_on(self):
+        return self._clip_on
+
+    def set_clip_on(self, b):
+        self._clip_on = bool(b)
 
     def get_alpha(self):
         return self._alpha
