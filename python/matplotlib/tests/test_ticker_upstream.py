@@ -1,7 +1,6 @@
 # Ported from lib/matplotlib/tests/test_ticker.py
 import pytest
 import matplotlib
-from matplotlib.rcsetup import _default_params
 
 
 def test_rcparams_formatter_keys():
