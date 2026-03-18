@@ -842,3 +842,284 @@ class LogNorm(Normalize):
             return [10.0 ** (log_vmin + float(v) * (log_vmax - log_vmin))
                     for v in value]
         return 10.0 ** (log_vmin + float(value) * (log_vmax - log_vmin))
+
+
+# ---------------------------------------------------------------------------
+# Colormap class hierarchy
+# Adapted from upstream matplotlib/colors.py (matplotlib 3.9.x)
+# Masked array usage replaced with NaN-based approach for RustPython compat.
+# Copyright (c) 2012- Matplotlib Development Team
+# Copyright (c) 2024 CodePod Contributors — BSD 3-Clause License
+# ---------------------------------------------------------------------------
+import numpy as np
+
+
+def _interp(x_new, xp, fp):
+    """Pure-Python piecewise-linear interpolation (replacement for np.interp)."""
+    xp_list = xp.tolist() if hasattr(xp, 'tolist') else list(xp)
+    fp_list = fp.tolist() if hasattr(fp, 'tolist') else list(fp)
+    x_list = x_new.tolist() if hasattr(x_new, 'tolist') else list(x_new)
+    result = []
+    n = len(xp_list)
+    for x in x_list:
+        if x <= xp_list[0]:
+            result.append(fp_list[0])
+        elif x >= xp_list[-1]:
+            result.append(fp_list[-1])
+        else:
+            # Binary search
+            lo, hi = 0, n - 1
+            while hi - lo > 1:
+                mid = (lo + hi) // 2
+                if xp_list[mid] <= x:
+                    lo = mid
+                else:
+                    hi = mid
+            t = (x - xp_list[lo]) / (xp_list[hi] - xp_list[lo])
+            result.append(fp_list[lo] + t * (fp_list[hi] - fp_list[lo]))
+    return np.array(result, dtype=float)
+
+
+class Colormap:
+    """Base class for all colormaps."""
+
+    def __init__(self, name, N=256):
+        self.name = name
+        self.N = int(N)
+        self._rgba_bad = (0.0, 0.0, 0.0, 0.0)  # transparent black
+        self._rgba_under = None
+        self._rgba_over = None
+
+    def __call__(self, X, alpha=None, bytes=False):
+        """Map scalar or array X in [0, 1] to RGBA.
+
+        Parameters
+        ----------
+        X : scalar or array-like
+            Values in [0, 1]. NaN values map to the "bad" color.
+        alpha : float, optional
+            Alpha multiplier applied after LUT lookup.
+        bytes : bool
+            If True, return uint8 values in [0, 255].
+
+        Returns
+        -------
+        tuple (4,) for scalar input; ndarray (…, 4) for array input.
+        """
+        if not hasattr(self, '_lut'):
+            self._init()
+
+        scalar_input = not hasattr(X, '__len__') and not hasattr(X, 'shape')
+        if scalar_input:
+            X = np.array([float(X)], dtype=float)
+        else:
+            X = np.asarray(X, dtype=float)
+
+        orig_shape = X.shape
+        X = X.flatten()
+
+        bad_mask = np.isnan(X)
+        under_mask = X < 0.0
+        over_mask = X > 1.0
+
+        # Clip to valid LUT range
+        Xc = np.clip(X, 0.0, 1.0)
+
+        # Map to LUT indices
+        idx = (Xc * (self.N - 1) + 0.5).astype('int64')
+        idx = np.clip(idx, 0, self.N - 1)
+
+        # Index into LUT
+        result = np.zeros((len(X), 4), dtype=float)
+        idx_list = idx.tolist()
+        for i, j in enumerate(idx_list):
+            result[i] = self._lut[int(j)]
+
+        # Apply special colors
+        bad_list = bad_mask.tolist()
+        under_list = under_mask.tolist()
+        over_list = over_mask.tolist()
+
+        bad_color = list(self._rgba_bad)
+        under_color = self._lut[0].tolist() if self._rgba_under is None else list(self._rgba_under)
+        over_color = self._lut[self.N - 1].tolist() if self._rgba_over is None else list(self._rgba_over)
+
+        for i in range(len(X)):
+            if bad_list[i]:
+                result[i] = bad_color
+            elif under_list[i]:
+                result[i] = under_color
+            elif over_list[i]:
+                result[i] = over_color
+
+        # Apply alpha multiplier
+        if alpha is not None:
+            result[:, 3] = result[:, 3] * float(alpha)
+
+        # Clip final result to [0, 1]
+        result = np.clip(result, 0.0, 1.0)
+
+        # Reshape to original shape + (4,)
+        if len(orig_shape) > 1:
+            result = result.reshape(orig_shape + (4,))
+        elif len(orig_shape) == 0:
+            result = result.reshape((4,))
+        # else: already (N, 4)
+
+        if bytes:
+            result_bytes = (result * 255 + 0.5).astype('int32')
+            if scalar_input:
+                return tuple(result_bytes[0].tolist())
+            return result_bytes
+
+        if scalar_input:
+            return tuple(result[0].tolist())
+        return result
+
+    def reversed(self, name=None):
+        """Return a reversed copy of this colormap."""
+        raise NotImplementedError(f"{type(self).__name__} does not support reversed()")
+
+    def set_bad(self, color='k', alpha=None):
+        """Set the color for masked/NaN values."""
+        self._rgba_bad = list(to_rgba(color, alpha=alpha))
+
+    def set_under(self, color='k', alpha=None):
+        """Set the color for out-of-range low values."""
+        self._rgba_under = list(to_rgba(color, alpha=alpha))
+
+    def set_over(self, color='k', alpha=None):
+        """Set the color for out-of-range high values."""
+        self._rgba_over = list(to_rgba(color, alpha=alpha))
+
+    def is_gray(self):
+        """Return True if the colormap is grayscale."""
+        if not hasattr(self, '_lut'):
+            self._init()
+        lut_list = self._lut[:self.N].tolist()
+        return all(
+            abs(row[0] - row[1]) < 1e-9 and abs(row[0] - row[2]) < 1e-9
+            for row in lut_list
+        )
+
+    def __repr__(self):
+        return f"<{type(self).__name__} '{self.name}'>"
+
+    def __eq__(self, other):
+        if not isinstance(other, Colormap):
+            return False
+        return self.name == other.name
+
+    def __copy__(self):
+        cls = type(self)
+        new = cls.__new__(cls)
+        new.__dict__.update(self.__dict__.copy())
+        if hasattr(self, '_lut'):
+            new._lut = self._lut.copy()
+        return new
+
+
+class LinearSegmentedColormap(Colormap):
+    """Colormap defined by piecewise-linear segment data.
+
+    segmentdata : dict with keys 'red', 'green', 'blue' (and optionally 'alpha').
+    Each value is either:
+      - a list of (x, y0, y1) triples, or
+      - a callable f(x) -> values in [0, 1].
+    """
+
+    def __init__(self, name, segmentdata, N=256, gamma=1.0):
+        super().__init__(name, N)
+        self._segmentdata = segmentdata
+        self._gamma = float(gamma)
+
+    def _init(self):
+        """Build the LUT array from segmentdata. Called lazily on first use."""
+        x = np.linspace(0.0, 1.0, self.N)
+        self._lut = np.zeros((self.N, 4), dtype=float)
+
+        for ch_idx, channel in enumerate(('red', 'green', 'blue')):
+            seg = self._segmentdata[channel]
+            if callable(seg):
+                vals = seg(x)
+                self._lut[:, ch_idx] = np.asarray(vals, dtype=float)
+            else:
+                # seg is a list of (x_i, y0_i, y1_i)
+                xs = np.array([pt[0] for pt in seg], dtype=float)
+                # Use y1 (right-hand side) for interpolation
+                ys = np.array([pt[2] for pt in seg], dtype=float)
+                self._lut[:, ch_idx] = _interp(x, xs, ys)
+
+        # Alpha channel
+        if 'alpha' in self._segmentdata:
+            seg = self._segmentdata['alpha']
+            if callable(seg):
+                self._lut[:, 3] = np.asarray(seg(x), dtype=float)
+            else:
+                xs = np.array([pt[0] for pt in seg], dtype=float)
+                ys = np.array([pt[2] for pt in seg], dtype=float)
+                self._lut[:, 3] = _interp(x, xs, ys)
+        else:
+            self._lut[:, 3] = 1.0
+
+        # Apply gamma
+        if self._gamma != 1.0:
+            self._lut[:, :3] = self._lut[:, :3] ** self._gamma
+
+        self._lut = np.clip(self._lut, 0.0, 1.0)
+
+    def set_gamma(self, gamma):
+        """Recompute LUT with a new gamma."""
+        self._gamma = float(gamma)
+        if hasattr(self, '_lut'):
+            del self._lut
+
+    @classmethod
+    def from_list(cls, name, colors, N=256):
+        """Create a LinearSegmentedColormap from a list of colors.
+
+        Parameters
+        ----------
+        name : str
+        colors : list of color specs, or list of (value, color) pairs
+        N : int, number of LUT entries
+        """
+        if len(colors) == 0:
+            raise ValueError("colors must not be empty")
+
+        # Normalize: accept plain list or list of (val, color)
+        if isinstance(colors[0], (list, tuple)) and len(colors[0]) == 2 and not isinstance(colors[0][0], str):
+            # List of (val, color)
+            vals = [float(c[0]) for c in colors]
+            cols = [c[1] for c in colors]
+        else:
+            # Plain list of colors — evenly spaced
+            n = len(colors)
+            vals = [i / (n - 1) for i in range(n)] if n > 1 else [0.0]
+            cols = colors
+
+        rgba = [to_rgba(c) for c in cols]
+
+        # Build segmentdata
+        r_seg = [(vals[i], rgba[i][0], rgba[i][0]) for i in range(len(vals))]
+        g_seg = [(vals[i], rgba[i][1], rgba[i][1]) for i in range(len(vals))]
+        b_seg = [(vals[i], rgba[i][2], rgba[i][2]) for i in range(len(vals))]
+        a_seg = [(vals[i], rgba[i][3], rgba[i][3]) for i in range(len(vals))]
+
+        segmentdata = {'red': r_seg, 'green': g_seg, 'blue': b_seg, 'alpha': a_seg}
+        return cls(name, segmentdata, N=N)
+
+    def reversed(self, name=None):
+        if name is None:
+            name = self.name + '_r'
+        # Reverse segmentdata by flipping x coordinates: x -> 1-x, swap y0/y1
+        new_sd = {}
+        for channel, seg in self._segmentdata.items():
+            if callable(seg):
+                orig = seg
+                new_sd[channel] = lambda x, f=orig: f(1.0 - x)
+            else:
+                new_seg = [(1.0 - pt[0], pt[2], pt[1]) for pt in reversed(seg)]
+                new_sd[channel] = new_seg
+        cmap = LinearSegmentedColormap(name, new_sd, N=self.N, gamma=self._gamma)
+        return cmap
