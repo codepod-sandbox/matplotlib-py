@@ -73,6 +73,10 @@ _default_params = {
     # Saving
     'savefig.dpi': 'figure',
     'savefig.format': 'png',
+
+    # Image / colormap
+    'image.cmap': 'viridis',
+    'image.lut': 256,
 }
 
 
