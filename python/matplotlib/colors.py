@@ -1123,3 +1123,47 @@ class LinearSegmentedColormap(Colormap):
                 new_sd[channel] = new_seg
         cmap = LinearSegmentedColormap(name, new_sd, N=self.N, gamma=self._gamma)
         return cmap
+
+
+class ListedColormap(Colormap):
+    """Colormap defined by a fixed list of colors.
+
+    Parameters
+    ----------
+    colors : list of color specs
+    name : str
+    N : int or None — if None, defaults to len(colors)
+    """
+
+    def __init__(self, colors, name='from_list', N=None):
+        if N is None:
+            N = len(colors)
+        super().__init__(name, N)
+        self.colors = colors
+
+    def _init(self):
+        """Build LUT from the colors list."""
+        rgba = to_rgba_array(self.colors)
+        # Resample to N entries if needed
+        # to_rgba_array may return a list or ndarray
+        if hasattr(rgba, 'tolist'):
+            rgba_list = rgba.tolist()
+        else:
+            rgba_list = [list(row) for row in rgba]
+        n_src = len(rgba_list)
+        if n_src != self.N:
+            # Nearest-neighbor resample
+            lut_list = []
+            for i in range(self.N):
+                src_idx = int(i * n_src / self.N)
+                src_idx = min(src_idx, n_src - 1)
+                lut_list.append(rgba_list[src_idx])
+            self._lut = np.array(lut_list, dtype=float)
+        else:
+            self._lut = np.array(rgba_list, dtype=float)
+
+    def reversed(self, name=None):
+        if name is None:
+            name = self.name + '_r'
+        colors = self.colors[::-1] if isinstance(self.colors, list) else list(reversed(self.colors))
+        return ListedColormap(colors, name=name, N=self.N)
